@@ -1,14 +1,13 @@
 use chrono::{DateTime, TimeZone, Utc};
 use clap::{App, Arg, ArgMatches, SubCommand};
-use rdkafka::{ClientConfig};
 use rdkafka::consumer::{BaseConsumer, Consumer};
-use rdkafka::metadata::{MetadataTopic};
-use serde::{Serialize, Deserialize};
+use rdkafka::metadata::MetadataTopic;
+use rdkafka::ClientConfig;
+use serde::{Deserialize, Serialize};
 use serde_json;
-use zookeeper::{ZooKeeper, Watcher, WatchedEvent, };
+use zookeeper::{WatchedEvent, Watcher, ZooKeeper};
 
 use std::time::Duration;
-
 
 use krs;
 use krs::topics::ListCommand;
@@ -78,7 +77,9 @@ fn dispatch(m: ArgMatches<'_>) -> krs::Result<()> {
             Ok(())
         }
     } else {
-        Err(krs::Error::Generic("Please specify a subcommand! Use -h for more information.".into()))
+        Err(krs::Error::Generic(
+            "Please specify a subcommand! Use -h for more information.".into(),
+        ))
     }
 }
 
@@ -110,18 +111,17 @@ fn main() -> krs::Result<()> {
     let matches = App::new("krs")
         .about("Better Kafka CLI tool.")
         .author("Ivan Gozali <gozaliivan@gmail.com>")
-        .subcommand(SubCommand::with_name("topics")
-            .about("Topic commands")
-            .subcommand(SubCommand::with_name("list")
-                .about("List topics")
-                .arg(brokers())
-            )
-            .subcommand(SubCommand::with_name("describe")
-                .about("Show more info about topic name.")
-                .arg(brokers())
-                .arg(topic())
-                .arg(zookeeper())
-            )
+        .subcommand(
+            SubCommand::with_name("topics")
+                .about("Topic commands")
+                .subcommand(ListCommand::subcommand())
+                .subcommand(
+                    SubCommand::with_name("describe")
+                        .about("Show more info about topic name.")
+                        .arg(brokers())
+                        .arg(topic())
+                        .arg(zookeeper()),
+                ),
         )
         .get_matches();
 

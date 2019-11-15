@@ -1,4 +1,4 @@
-use clap::ArgMatches;
+use clap::{App, Arg, ArgMatches, SubCommand};
 use rdkafka::consumer::{BaseConsumer, Consumer};
 use rdkafka::metadata::MetadataTopic;
 use serde::{Deserialize, Serialize};
@@ -79,10 +79,25 @@ impl From<&ArgMatches<'_>> for ListCommand {
 }
 
 impl ListCommand {
+    pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
+        SubCommand::with_name("list").about("List topics").arg(
+            Arg::with_name("brokers")
+                .help("Comma-delimited list of brokers")
+                .short("b")
+                .takes_value(true)
+                .required(true),
+        )
+    }
+
     pub fn run(&self) -> crate::Result<()> {
         let md = match self.consumer.fetch_metadata(None, Some(DEFAULT_TIMEOUT)) {
             Ok(v) => v,
-            Err(e) => return Err(crate::Error::Generic(format!("Error while fetching metadata. {:?}", e))),
+            Err(e) => {
+                return Err(crate::Error::Generic(format!(
+                    "Error while fetching metadata. {:?}",
+                    e
+                )))
+            }
         };
 
         let topics = md.topics();
