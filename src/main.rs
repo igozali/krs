@@ -7,10 +7,10 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use zookeeper::{WatchedEvent, Watcher, ZooKeeper};
 
+use std::env;
 use std::time::Duration;
 
-use krs;
-use krs::topics::ListCommand;
+use krs::Config;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -62,9 +62,10 @@ impl Watcher for _Watcher {
 //             describe_topic(brokers, zookeeper, topic);
 
 fn dispatch(m: ArgMatches<'_>) -> krs::Result<()> {
+    let config: Config = (&m).into();
     if let Some(s) = m.subcommand_matches("topics") {
         if let Some(ss) = s.subcommand_matches("list") {
-            let cmd: ListCommand = ss.into();
+            let cmd: krs::topics::ListCommand = config.into();
             cmd.run()
         }
         // else if let Some(ss) = s.subcommand_matches("describe") {
@@ -74,7 +75,18 @@ fn dispatch(m: ArgMatches<'_>) -> krs::Result<()> {
         //     Ok(())
         // }
         else {
-            Ok(())
+            Err(krs::Error::Generic(
+                "Please specify a subcommand! Use -h for more information.".into(),
+            ))
+        }
+    } else if let Some(s) = m.subcommand_matches("env") {
+        if let Some(ss) = s.subcommand_matches("show") {
+            let cmd: krs::env::ShowCommand = config.into();
+            cmd.run()
+        } else {
+            Err(krs::Error::Generic(
+                "Please specify a subcommand! Use -h for more information.".into(),
+            ))
         }
     } else {
         Err(krs::Error::Generic(
@@ -83,14 +95,12 @@ fn dispatch(m: ArgMatches<'_>) -> krs::Result<()> {
     }
 }
 
-// krs topics list|create|delete|describe --brokers
-fn main() -> krs::Result<()> {
+fn make_parser<'a, 'b>() -> App<'a, 'b> {
     fn brokers<'a, 'n>() -> Arg<'a, 'n> {
         Arg::with_name("brokers")
             .help("Comma-delimited list of brokers")
             .short("b")
             .takes_value(true)
-            .required(true)
     }
 
     fn zookeeper<'a, 'b>() -> Arg<'a, 'b> {
@@ -105,16 +115,27 @@ fn main() -> krs::Result<()> {
             .help("Topic name")
             .short("t")
             .takes_value(true)
-            .required(true)
     }
 
-    let matches = App::new("krs")
-        .about("Better Kafka CLI tool.")
-        .author("Ivan Gozali <gozaliivan@gmail.com>")
+    App::new("krs")
+        .about("Decent Kafka CLI tool.")
+        .arg(brokers())
+        .arg(zookeeper())
+        .arg(
+            Arg::with_name("output-type")
+                .short("o")
+                .help("Output type (can be table, csv, json)")
+                .default_value("json")
+        )
+        .subcommand(
+            SubCommand::with_name("env")
+                .about("Environment commands")
+                .subcommand(krs::env::ShowCommand::subcommand())
+        )
         .subcommand(
             SubCommand::with_name("topics")
                 .about("Topic commands")
-                .subcommand(ListCommand::subcommand())
+                .subcommand(krs::topics::ListCommand::subcommand())
                 .subcommand(
                     SubCommand::with_name("describe")
                         .about("Show more info about topic name.")
@@ -123,7 +144,13 @@ fn main() -> krs::Result<()> {
                         .arg(zookeeper()),
                 ),
         )
-        .get_matches();
+}
+
+// krs env show|set
+// krs topics list|create|delete|describe --brokers
+fn main() -> krs::Result<()> {
+    let app = make_parser();
+    let matches = app.get_matches_from(env::args());
 
     dispatch(matches)
 }

@@ -4,9 +4,9 @@ use rdkafka::metadata::MetadataTopic;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-use serde_json;
+use crate::{CommandBase, Config};
 
-use crate::util::make_consumer;
+use serde_json;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -23,25 +23,6 @@ struct PartitionInfo {
 struct TopicInfo {
     name: String,
     partitions: Vec<PartitionInfo>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ShortTopicInfo {
-    name: String,
-    num_partitions: usize,
-    // TODO: Get from zookeeper.
-    //replication_factor: usize
-    //ctime: Instant,
-    //btime
-}
-
-impl From<&MetadataTopic> for ShortTopicInfo {
-    fn from(mt: &MetadataTopic) -> Self {
-        Self {
-            name: mt.name().to_owned(),
-            num_partitions: mt.partitions().len(),
-        }
-    }
 }
 
 impl From<&MetadataTopic> for TopicInfo {
@@ -63,17 +44,34 @@ impl From<&MetadataTopic> for TopicInfo {
     }
 }
 
-pub struct ListCommand {
-    consumer: BaseConsumer,
-    brokers: String,
+#[derive(Debug, Serialize, Deserialize)]
+struct ShortTopicInfo {
+    name: String,
+    num_partitions: usize,
+    // TODO: Get from zookeeper.
+    //replication_factor: usize
+    //ctime: Instant,
+    //btime
 }
 
-impl From<&ArgMatches<'_>> for ListCommand {
-    fn from(args: &ArgMatches<'_>) -> Self {
-        let brokers = args.value_of("brokers").unwrap().to_string();
+impl From<&MetadataTopic> for ShortTopicInfo {
+    fn from(mt: &MetadataTopic) -> Self {
         Self {
-            consumer: make_consumer(&brokers),
-            brokers: brokers,
+            name: mt.name().to_owned(),
+            num_partitions: mt.partitions().len(),
+        }
+    }
+}
+
+pub struct ListCommand {
+    base: CommandBase
+}
+
+impl From<Config> for ListCommand {
+    fn from(args: Config) -> Self {
+        let brokers = args.brokers.as_ref().unwrap();
+        Self {
+            base: CommandBase::new(&brokers)
         }
     }
 }
@@ -90,7 +88,7 @@ impl ListCommand {
     }
 
     pub fn run(&self) -> crate::Result<()> {
-        let md = match self.consumer.fetch_metadata(None, Some(DEFAULT_TIMEOUT)) {
+        let md = match self.base.consumer.fetch_metadata(None, Some(DEFAULT_TIMEOUT)) {
             Ok(v) => v,
             Err(e) => {
                 return Err(crate::Error::Generic(format!(
