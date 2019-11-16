@@ -62,40 +62,34 @@ impl Watcher for _Watcher {
 //             describe_topic(brokers, zookeeper, topic);
 
 fn dispatch(m: ArgMatches<'_>) -> krs::Result<()> {
-    let config: Config = (&m).into();
-    if let Some(s) = m.subcommand_matches("topics") {
-        if let Some(ss) = s.subcommand_matches("list") {
-            let cmd: krs::topics::ListCommand = config.into();
-            cmd.run()
-        }
-        // else if let Some(ss) = s.subcommand_matches("describe") {
-        //     let brokers = ss.value_of("brokers").unwrap().to_owned();
-        //     let topic = ss.value_of("topic").unwrap().to_owned();
-        //     // describe_topic(brokers, topic);
-        //     Ok(())
-        // }
-        else {
-            Err(krs::Error::Generic(
-                "Please specify a subcommand! Use -h for more information.".into(),
-            ))
-        }
-    } else if let Some(s) = m.subcommand_matches("env") {
-        if let Some(ss) = s.subcommand_matches("show") {
-            let cmd: krs::env::ShowCommand = config.into();
-            cmd.run()
-        } else {
-            Err(krs::Error::Generic(
-                "Please specify a subcommand! Use -h for more information.".into(),
-            ))
-        }
-    } else {
+    fn fail(name: &str) -> krs::Result<()> {
         Err(krs::Error::Generic(
-            "Please specify a subcommand! Use -h for more information.".into(),
+            format!("Unhandled subcommand `{}`! Use -h for more information.", name),
         ))
+    }
+
+    let config: Config = (&m).into();
+    println!("{:?}", config);
+    match m.subcommand() {
+        ("topics", Some(s)) => {
+            match s.subcommand() {
+                ("list", _) => krs::topics::ListCommand::from(config).run(),
+                (unhandled, _) => fail(unhandled)
+            }
+        },
+        ("env", Some(s)) => {
+            match s.subcommand() {
+                ("show", _) => krs::env::ShowCommand::from(config).run(),
+                (unhandled, _) => fail(unhandled)
+            }
+        },
+        (unhandled, _) => fail(unhandled)
     }
 }
 
 fn make_parser<'a, 'b>() -> App<'a, 'b> {
+    // TODO: Not sure if each subcommand should also specify these args in addition
+    // to the top level command.
     fn brokers<'a, 'n>() -> Arg<'a, 'n> {
         Arg::with_name("brokers")
             .help("Comma-delimited list of brokers")
@@ -151,6 +145,5 @@ fn make_parser<'a, 'b>() -> App<'a, 'b> {
 fn main() -> krs::Result<()> {
     let app = make_parser();
     let matches = app.get_matches_from(env::args());
-
     dispatch(matches)
 }

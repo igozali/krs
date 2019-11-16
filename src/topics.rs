@@ -83,7 +83,6 @@ impl ListCommand {
                 .help("Comma-delimited list of brokers")
                 .short("b")
                 .takes_value(true)
-                .required(true),
         )
     }
 
