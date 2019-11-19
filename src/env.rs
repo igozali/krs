@@ -1,8 +1,8 @@
-use clap::{App, SubCommand};
 use crate::Config;
+use clap::{App, SubCommand};
 
 pub struct ShowCommand {
-    config: Config
+    config: Config,
 }
 
 impl From<Config> for ShowCommand {
@@ -13,8 +13,7 @@ impl From<Config> for ShowCommand {
 
 impl ShowCommand {
     pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
-        SubCommand::with_name("show")
-            .help("Shows the current Kafka environment")
+        SubCommand::with_name("show").help("Shows the current Kafka environment")
     }
 
     pub fn run(&self) -> crate::Result<()> {
@@ -25,3 +24,4 @@ impl ShowCommand {
         Ok(())
     }
 }
+
