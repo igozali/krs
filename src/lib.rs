@@ -1,9 +1,10 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt::{Debug, Display};
 use std::result::Result as _Result;
 use std::time::Duration;
 
 use clap::{App, ArgMatches, SubCommand};
+use dotenv;
 use rdkafka::consumer::BaseConsumer;
 use rdkafka::ClientConfig;
 
@@ -52,6 +53,15 @@ struct Sourced<T> {
     value: T,
 }
 
+impl<T> Default for Sourced<Option<T>> {
+    fn default() -> Self {
+        Self {
+            source: "unknown".to_owned(),
+            value: None,
+        }
+    }
+}
+
 impl<T> std::ops::Deref for Sourced<T> {
     type Target = T;
 
@@ -69,28 +79,79 @@ impl<T: Display> Display for Sourced<Option<T>> {
     }
 }
 
-#[derive(Debug)]
+// All fields are optional since I'd like to collect them from various
+// places: env variables, .env file, CLI arguments from various levels
+#[derive(Debug, Default)]
 pub struct Config {
-    output_type: OutputType,
+    output_type: Option<OutputType>,
     brokers: Sourced<Option<String>>,
     zookeeper: Sourced<Option<String>>,
     topic: Option<String>,
+}
+
+impl Config {
+    fn from_env() -> Self {
+        Self {
+            brokers: Sourced {
+                source: "envvar (KRS_BROKERS)".to_owned(),
+                value: std::env::var("KRS_BROKERS").ok(),
+            },
+            zookeeper: Sourced {
+                source: "envvar (KRS_ZOOKEEPER)".to_owned(),
+                value: std::env::var("KRS_ZOOKEEPER").ok(),
+            },
+            ..Default::default()
+        }
+    }
+
+    fn from_dotenv() -> Self {
+        Self {
+            brokers: Sourced {
+                source: ".env file (KRS_BROKERS)".to_owned(),
+                value: dotenv::var("KRS_BROKERS").ok(),
+            },
+            zookeeper: Sourced {
+                source: ".env file (KRS_ZOOKEEPER)".to_owned(),
+                value: dotenv::var("KRS_ZOOKEEPER").ok(),
+            },
+            ..Default::default()
+        }
+    }
+
+    // Merge two configs together, giving preference to `rhs` only if
+    // the fields in `rhs` are not None.
+    fn merge(self, rhs: Self) -> Self {
+        Self {
+            output_type: rhs.output_type.or(self.output_type),
+            brokers: match rhs.brokers.value {
+                Some(_) => rhs.brokers,
+                None => self.brokers,
+            },
+            zookeeper: match rhs.zookeeper.value {
+                Some(_) => rhs.zookeeper,
+                None => self.zookeeper,
+            },
+            topic: rhs.topic.or(self.topic),
+        }
+    }
 }
 
 impl From<&ArgMatches<'_>> for Config {
     fn from(args: &ArgMatches<'_>) -> Self {
         let args = args;
         Self {
-            output_type: args.value_of("output-type").unwrap().try_into().unwrap(),
+            output_type: args
+                .value_of("output-type")
+                .map(|x| OutputType::try_from(x).expect(&format!("Invalid output type {}", x))),
             brokers: Sourced {
                 source: "-b/--brokers".into(),
-                value: args.value_of("brokers").map(|x| x.into()),
+                value: args.value_of("brokers").map(|x| x.to_owned()),
             },
             zookeeper: Sourced {
                 source: "-z/--zookeeper".into(),
-                value: args.value_of("zookeeper").map(|x| x.into()),
+                value: args.value_of("zookeeper").map(|x| x.to_owned()),
             },
-            topic: args.value_of("topic").map(|x| x.into()),
+            topic: args.value_of("topic").map(|x| x.to_owned()),
         }
     }
 }
@@ -113,6 +174,7 @@ impl CommandBase {
     }
 }
 
+// TODO: This function still looks really ugly. I wonder if I could macro this.
 pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
     fn fail(name: &str) -> Result<()> {
         Err(Error::Generic(format!(
@@ -121,16 +183,20 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
         )))
     }
 
-    let config = Config::from(&m);
-    println!("{:?}", config);
+    let config = Config::from_env();
+    let config = config.merge(Config::from_dotenv());
+    let config = config.merge(Config::from(&m));
+    // FIXME: Commands should implement TryFrom, not From.
     match m.subcommand() {
         ("topics", Some(s)) => match s.subcommand() {
-            ("list", _) => topics::ListCommand::from(config).run(),
-            ("describe", _) => topics::DescribeCommand::from(config).run(),
+            ("list", Some(ss)) => topics::ListCommand::from(config.merge(Config::from(ss))).run(),
+            ("describe", Some(ss)) => {
+                topics::DescribeCommand::from(config.merge(Config::from(ss))).run()
+            }
             (unhandled, _) => fail(unhandled),
         },
         ("env", Some(s)) => match s.subcommand() {
-            ("show", _) => env::ShowCommand::from(config).run(),
+            ("show", Some(ss)) => env::ShowCommand::from(config.merge(Config::from(ss))).run(),
             (unhandled, _) => fail(unhandled),
         },
         (unhandled, _) => fail(unhandled),

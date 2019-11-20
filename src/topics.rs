@@ -7,7 +7,7 @@ use serde_json;
 use zookeeper::{WatchedEvent, Watcher, ZooKeeper};
 
 use crate::args;
-use crate::{CommandBase, Config, DEFAULT_TIMEOUT, Error};
+use crate::{CommandBase, Config, Error, DEFAULT_TIMEOUT};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct PartitionInfo {
@@ -24,7 +24,7 @@ struct TopicInfo {
     partitions: Vec<PartitionInfo>,
     // Both the fields below are only retrieved in DescribeCommand
     ctime: Option<String>,
-    mtime: Option<String>
+    mtime: Option<String>,
 }
 
 impl From<&MetadataTopic> for TopicInfo {
@@ -72,7 +72,10 @@ pub struct ListCommand {
 
 impl From<Config> for ListCommand {
     fn from(args: Config) -> Self {
-        let brokers = args.brokers.as_ref().unwrap();
+        let brokers = args
+            .brokers
+            .as_ref()
+            .expect("brokers is required for `topics list`");
         Self {
             base: CommandBase::new(&brokers),
         }
@@ -87,11 +90,12 @@ impl ListCommand {
     }
 
     pub fn run(&self) -> crate::Result<()> {
-        let md = match self
+        let res = self
             .base
             .consumer
-            .fetch_metadata(None, Some(DEFAULT_TIMEOUT))
-        {
+            .fetch_metadata(None, Some(DEFAULT_TIMEOUT));
+
+        let md = match res {
             Ok(v) => v,
             Err(e) => {
                 return Err(Error::Generic(format!(
@@ -119,7 +123,7 @@ impl Watcher for _Watcher {
 pub struct DescribeCommand {
     base: CommandBase,
     zk: ZooKeeper,
-    topic: String
+    topic: String,
 }
 
 impl From<Config> for DescribeCommand {
@@ -132,7 +136,7 @@ impl From<Config> for DescribeCommand {
         Self {
             base: CommandBase::new(&brokers),
             zk: zk,
-            topic: conf.topic.unwrap()
+            topic: conf.topic.unwrap(),
         }
     }
 }
@@ -149,17 +153,28 @@ impl DescribeCommand {
     pub fn run(&self) -> crate::Result<()> {
         let topic_name = &self.topic;
 
-        let md = self.base.consumer.fetch_metadata(Some(&topic_name), Some(DEFAULT_TIMEOUT)).unwrap();
+        let md = self
+            .base
+            .consumer
+            .fetch_metadata(Some(&topic_name), Some(DEFAULT_TIMEOUT))
+            .unwrap();
         let topics = md.topics();
         assert!(topics.len() == 1, "DescribeCommand takes only 1 topic");
 
         let mut info = TopicInfo::from(&topics[0]);
         for p in info.partitions.iter_mut() {
-            let watermarks = self.base.consumer.fetch_watermarks(&topic_name, p.id, Some(DEFAULT_TIMEOUT)).unwrap();
+            let watermarks = self
+                .base
+                .consumer
+                .fetch_watermarks(&topic_name, p.id, Some(DEFAULT_TIMEOUT))
+                .unwrap();
             p.watermarks = watermarks;
         }
 
-        let (_, stat) = self.zk.get_data(&format!("/brokers/topics/{}", topic_name), false).unwrap();
+        let (_, stat) = self
+            .zk
+            .get_data(&format!("/brokers/topics/{}", topic_name), false)
+            .unwrap();
         info.ctime = Some(Utc.timestamp(stat.ctime / 1000, 0).to_string());
         info.mtime = Some(Utc.timestamp(stat.mtime / 1000, 0).to_string());
 

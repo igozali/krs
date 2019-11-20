@@ -1,5 +1,6 @@
-use crate::Config;
 use clap::{App, SubCommand};
+
+use crate::Config;
 
 pub struct ShowCommand {
     config: Config,
@@ -24,4 +25,3 @@ impl ShowCommand {
         Ok(())
     }
 }
-

@@ -1,6 +1,6 @@
 use std::env;
 
-use krs::{make_parser, dispatch};
+use krs::{dispatch, make_parser};
 
 // krs env show|set
 // krs topics list|create|delete|describe --brokers
