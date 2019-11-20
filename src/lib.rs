@@ -163,6 +163,7 @@ struct CommandBase {
     consumer: BaseConsumer,
 }
 
+// TODO: Not sure I even need this.
 impl CommandBase {
     fn new(brokers: &str) -> Self {
         Self {
@@ -197,6 +198,7 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
         },
         ("env", Some(s)) => match s.subcommand() {
             ("show", Some(ss)) => env::ShowCommand::from(config.merge(Config::from(ss))).run(),
+            ("set", Some(ss)) => env::SetCommand::from(config.merge(Config::from(ss))).run(),
             (unhandled, _) => fail(unhandled),
         },
         (unhandled, _) => fail(unhandled),
@@ -212,7 +214,8 @@ pub fn make_parser<'a, 'b>() -> App<'a, 'b> {
         .subcommand(
             SubCommand::with_name("env")
                 .about("Environment commands")
-                .subcommand(env::ShowCommand::subcommand()),
+                .subcommand(env::ShowCommand::subcommand())
+                .subcommand(env::SetCommand::subcommand()),
         )
         .subcommand(
             SubCommand::with_name("topics")
