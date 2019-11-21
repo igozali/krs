@@ -1,7 +1,7 @@
 [package]
 name = "krs"
 description = "Simple Kafka command-line tool"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Ivan Gozali <gozaliivan@gmail.com>"]
 repository = "https://github.com/igozali/krs"
 homepage = "https://github.com/igozali/krs"
