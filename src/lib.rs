@@ -1,6 +1,5 @@
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display};
-use std::result::Result as _Result;
 use std::time::Duration;
 
 use clap::{App, ArgMatches, SubCommand};
@@ -15,13 +14,22 @@ pub mod util;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub type Result<T> = _Result<T, Error>;
-
 #[derive(Debug)]
 pub enum Error {
     InvalidArgument(String, String),
     Generic(String),
 }
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // Just use Debug representation
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for Error {}
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 enum OutputType {
@@ -51,6 +59,15 @@ impl TryFrom<&str> for OutputType {
 struct Sourced<T> {
     source: String,
     value: T,
+}
+
+impl<T> Sourced<Option<T>> {
+    fn or(self, other: Sourced<Option<T>>) -> Sourced<Option<T>> {
+        match self.value {
+            Some(_) => self,
+            None => other
+        }
+    }
 }
 
 impl<T> Default for Sourced<Option<T>> {
@@ -93,11 +110,11 @@ impl Config {
     fn from_env() -> Self {
         Self {
             brokers: Sourced {
-                source: "envvar (KRS_BROKERS)".to_owned(),
+                source: "env var (KRS_BROKERS)".to_owned(),
                 value: std::env::var("KRS_BROKERS").ok(),
             },
             zookeeper: Sourced {
-                source: "envvar (KRS_ZOOKEEPER)".to_owned(),
+                source: "env var (KRS_ZOOKEEPER)".to_owned(),
                 value: std::env::var("KRS_ZOOKEEPER").ok(),
             },
             ..Default::default()
@@ -123,14 +140,8 @@ impl Config {
     fn merge(self, rhs: Self) -> Self {
         Self {
             output_type: rhs.output_type.or(self.output_type),
-            brokers: match rhs.brokers.value {
-                Some(_) => rhs.brokers,
-                None => self.brokers,
-            },
-            zookeeper: match rhs.zookeeper.value {
-                Some(_) => rhs.zookeeper,
-                None => self.zookeeper,
-            },
+            brokers: rhs.brokers.or(self.brokers),
+            zookeeper: rhs.zookeeper.or(self.zookeeper),
             topic: rhs.topic.or(self.topic),
         }
     }
@@ -156,23 +167,13 @@ impl From<&ArgMatches<'_>> for Config {
     }
 }
 
-// This is me experimenting with "superclasses" in Rust. Maybe I'll realize eventually
-// that it's not really needed.
-struct CommandBase {
-    // All commands need a Kafka consumer.
-    consumer: BaseConsumer,
-}
 
-// TODO: Not sure I even need this.
-impl CommandBase {
-    fn new(brokers: &str) -> Self {
-        Self {
-            consumer: ClientConfig::new()
-                .set("bootstrap.servers", brokers)
-                .create()
-                .unwrap(),
-        }
-    }
+// Creates a new Kafka consumer with only the para
+fn new_consumer(brokers: &str) -> BaseConsumer {
+    ClientConfig::new()
+        .set("bootstrap.servers", brokers)
+        .create()
+        .unwrap()
 }
 
 // TODO: This function still looks really ugly. I wonder if I could macro this.
@@ -192,7 +193,8 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
         ("topics", Some(s)) => match s.subcommand() {
             ("list", Some(ss)) => topics::ListCommand::from(config.merge(Config::from(ss))).run(),
             ("describe", Some(ss)) => {
-                topics::DescribeCommand::from(config.merge(Config::from(ss))).run()
+                let topic_name = ss.value_of("topic").unwrap();
+                topics::DescribeCommand::from(config.merge(Config::from(ss))).run(topic_name)
             }
             (unhandled, _) => fail(unhandled),
         },

@@ -1,13 +1,13 @@
 use chrono::{TimeZone, Utc};
 use clap::{App, SubCommand};
-use rdkafka::consumer::Consumer;
+use rdkafka::consumer::{Consumer, BaseConsumer};
 use rdkafka::metadata::MetadataTopic;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use zookeeper::{WatchedEvent, Watcher, ZooKeeper};
 
 use crate::args;
-use crate::{CommandBase, Config, Error, DEFAULT_TIMEOUT};
+use crate::{new_consumer, Config, Error, DEFAULT_TIMEOUT};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct PartitionInfo {
@@ -67,19 +67,7 @@ impl From<&MetadataTopic> for ShortTopicInfo {
 }
 
 pub struct ListCommand {
-    base: CommandBase,
-}
-
-impl From<Config> for ListCommand {
-    fn from(args: Config) -> Self {
-        let brokers = args
-            .brokers
-            .as_ref()
-            .expect("brokers is required for `topics list`");
-        Self {
-            base: CommandBase::new(&brokers),
-        }
-    }
+    consumer: BaseConsumer,
 }
 
 impl ListCommand {
@@ -91,7 +79,6 @@ impl ListCommand {
 
     pub fn run(&self) -> crate::Result<()> {
         let res = self
-            .base
             .consumer
             .fetch_metadata(None, Some(DEFAULT_TIMEOUT));
 
@@ -113,32 +100,28 @@ impl ListCommand {
     }
 }
 
-struct _Watcher;
-impl Watcher for _Watcher {
+impl From<Config> for ListCommand {
+    fn from(conf: Config) -> Self {
+        let brokers = conf
+            .brokers
+            .as_ref()
+            .expect("brokers is required for `topics list`");
+        Self {
+            consumer: new_consumer(&brokers),
+        }
+    }
+}
+
+struct DoNothingWatcher;
+impl Watcher for DoNothingWatcher {
     fn handle(&self, _e: WatchedEvent) {
         // Do nothing
     }
 }
 
 pub struct DescribeCommand {
-    base: CommandBase,
+    consumer: BaseConsumer,
     zk: ZooKeeper,
-    topic: String,
-}
-
-impl From<Config> for DescribeCommand {
-    fn from(conf: Config) -> Self {
-        let brokers = conf.brokers.as_ref().unwrap();
-        let zookeeper = conf.zookeeper.as_ref().unwrap();
-
-        let zk = ZooKeeper::connect(&zookeeper, DEFAULT_TIMEOUT, _Watcher).unwrap();
-
-        Self {
-            base: CommandBase::new(&brokers),
-            zk: zk,
-            topic: conf.topic.unwrap(),
-        }
-    }
 }
 
 impl DescribeCommand {
@@ -150,11 +133,8 @@ impl DescribeCommand {
             .arg(args::zookeeper())
     }
 
-    pub fn run(&self) -> crate::Result<()> {
-        let topic_name = &self.topic;
-
+    pub fn run(&self, topic_name: &str) -> crate::Result<()> {
         let md = self
-            .base
             .consumer
             .fetch_metadata(Some(&topic_name), Some(DEFAULT_TIMEOUT))
             .unwrap();
@@ -164,7 +144,6 @@ impl DescribeCommand {
         let mut info = TopicInfo::from(&topics[0]);
         for p in info.partitions.iter_mut() {
             let watermarks = self
-                .base
                 .consumer
                 .fetch_watermarks(&topic_name, p.id, Some(DEFAULT_TIMEOUT))
                 .unwrap();
@@ -182,3 +161,22 @@ impl DescribeCommand {
         Ok(())
     }
 }
+
+impl From<Config> for DescribeCommand {
+    fn from(conf: Config) -> Self {
+        let brokers = conf.brokers.as_ref().unwrap();
+        let zookeeper = conf.zookeeper.as_ref().unwrap();
+
+        Self {
+            consumer: new_consumer(&brokers),
+            zk: ZooKeeper::connect(&zookeeper, DEFAULT_TIMEOUT, DoNothingWatcher).unwrap(),
+        }
+    }
+}
+
+struct CreateCommand {
+    consumer: BaseConsumer,
+    zk: ZooKeeper
+}
+
+
