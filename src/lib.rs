@@ -4,6 +4,8 @@ use std::time::Duration;
 
 use clap::{App, ArgMatches, SubCommand};
 use dotenv;
+use rdkafka::admin::AdminClient;
+use rdkafka::client::DefaultClientContext;
 use rdkafka::consumer::BaseConsumer;
 use rdkafka::ClientConfig;
 
@@ -16,8 +18,11 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
 pub enum Error {
-    InvalidArgument(String, String),
+    InvalidUsage(String),
     Generic(String),
+    Kafka(rdkafka::error::KafkaError),
+    Clap(clap::Error),
+    Other(Box<dyn std::error::Error>),
 }
 
 impl Display for Error {
@@ -32,7 +37,7 @@ impl std::error::Error for Error {}
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
-enum OutputType {
+pub enum OutputType {
     Table,
     Csv,
     Json,
@@ -44,11 +49,11 @@ impl TryFrom<&str> for OutputType {
     type Error = Error;
 
     fn try_from(s: &str) -> Result<Self> {
-        match s.as_ref() {
+        match s {
             "table" => Ok(OutputType::Table),
             "csv" => Ok(OutputType::Csv),
             "json" => Ok(OutputType::Json),
-            other => Err(Error::InvalidArgument("output_type".into(), other.into())),
+            other => Err(Error::InvalidUsage(format!("Invalid argument for output_type: {}", other))),
         }
     }
 }
@@ -56,16 +61,16 @@ impl TryFrom<&str> for OutputType {
 // Indicates that a value may come from environment variables,
 // .env file, or CLI options.
 #[derive(Debug)]
-struct Sourced<T> {
-    source: String,
-    value: T,
+pub struct Sourced<T> {
+    pub source: String,
+    pub value: T,
 }
 
 impl<T> Sourced<Option<T>> {
     fn or(self, other: Sourced<Option<T>>) -> Sourced<Option<T>> {
         match self.value {
             Some(_) => self,
-            None => other
+            None => other,
         }
     }
 }
@@ -100,10 +105,10 @@ impl<T: Display> Display for Sourced<Option<T>> {
 // places: env variables, .env file, CLI arguments from various levels
 #[derive(Debug, Default)]
 pub struct Config {
-    output_type: Option<OutputType>,
-    brokers: Sourced<Option<String>>,
-    zookeeper: Sourced<Option<String>>,
-    topic: Option<String>,
+    pub output_type: Option<OutputType>,
+    pub brokers: Sourced<Option<String>>,
+    pub zookeeper: Sourced<Option<String>>,
+    pub topic: Option<String>,
 }
 
 impl Config {
@@ -151,9 +156,9 @@ impl From<&ArgMatches<'_>> for Config {
     fn from(args: &ArgMatches<'_>) -> Self {
         let args = args;
         Self {
-            output_type: args
-                .value_of("output-type")
-                .map(|x| OutputType::try_from(x).expect(&format!("Invalid output type {}", x))),
+            output_type: args.value_of("output-type").map(|x| {
+                OutputType::try_from(x).unwrap_or_else(|_| panic!("Invalid output type {}", x))
+            }),
             brokers: Sourced {
                 source: "-b/--brokers".into(),
                 value: args.value_of("brokers").map(|x| x.to_owned()),
@@ -167,7 +172,6 @@ impl From<&ArgMatches<'_>> for Config {
     }
 }
 
-
 // Creates a new Kafka consumer with only the para
 fn new_consumer(brokers: &str) -> BaseConsumer {
     ClientConfig::new()
@@ -176,13 +180,33 @@ fn new_consumer(brokers: &str) -> BaseConsumer {
         .unwrap()
 }
 
+fn new_admin_client(brokers: &str) -> AdminClient<DefaultClientContext> {
+    ClientConfig::new()
+        .set("bootstrap.servers", brokers)
+        .create()
+        .unwrap()
+}
+
+// Just having fun with extension methods here. Not really necessary,
+// but looks cool.
+trait StringExt: ToString {
+    fn to_i32(&self) -> i32 {
+        self.to_string().parse().unwrap()
+    }
+}
+
+impl StringExt for &str {}
+
 // TODO: This function still looks really ugly. I wonder if I could macro this.
 pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
-    fn fail(name: &str) -> Result<()> {
-        Err(Error::Generic(format!(
-            "Unhandled subcommand `{}`! Use -h for more information.",
-            name
-        )))
+    fn fail(base: &str, subcmd: &str) -> Result<()> {
+        Err(Error::Generic(
+            if subcmd.len() == 0 {
+                format!("Incomplete subcommand: '{}'! Use -h for more information.", base)
+            } else {
+                format!("Invalid subcommand: '{} {}'! Use -h for more information.", base, subcmd)
+            }
+        ))
     }
 
     let config = Config::from_env();
@@ -191,19 +215,25 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
     // FIXME: Commands should implement TryFrom, not From.
     match m.subcommand() {
         ("topics", Some(s)) => match s.subcommand() {
-            ("list", Some(ss)) => topics::ListCommand::from(config.merge(Config::from(ss))).run(),
+            ("list", _) => topics::ListCommand::from(config).run(),
             ("describe", Some(ss)) => {
                 let topic_name = ss.value_of("topic").unwrap();
-                topics::DescribeCommand::from(config.merge(Config::from(ss))).run(topic_name)
+                topics::DescribeCommand::from(config).run(topic_name)
             }
-            (unhandled, _) => fail(unhandled),
+            ("create", Some(ss)) => {
+                let topic_name = ss.value_of("topic").expect("topic name is required for `topics create`");
+                let num_partitions = ss.value_of("num_partitions").map(|x| x.to_i32()).unwrap();
+                let num_replicas = ss.value_of("num_replicas").map(|x| x.to_i32()).unwrap();
+                topics::CreateCommand::from(config).run(topic_name, num_partitions, num_replicas)
+            }
+            (unhandled, _) => fail("topics", unhandled),
         },
         ("env", Some(s)) => match s.subcommand() {
-            ("show", Some(ss)) => env::ShowCommand::from(config.merge(Config::from(ss))).run(),
-            ("set", Some(ss)) => env::SetCommand::from(config.merge(Config::from(ss))).run(),
-            (unhandled, _) => fail(unhandled),
+            ("show", _) => env::ShowCommand::from(config).run(),
+            ("set", _) => env::SetCommand::from(config).run(),
+            (unhandled, _) => fail("env", unhandled),
         },
-        (unhandled, _) => fail(unhandled),
+        (unhandled, _) => fail("", unhandled),
     }
 }
 
@@ -223,6 +253,7 @@ pub fn make_parser<'a, 'b>() -> App<'a, 'b> {
             SubCommand::with_name("topics")
                 .about("Topic commands")
                 .subcommand(topics::ListCommand::subcommand())
-                .subcommand(topics::DescribeCommand::subcommand()),
+                .subcommand(topics::DescribeCommand::subcommand())
+                .subcommand(topics::CreateCommand::subcommand()),
         )
 }

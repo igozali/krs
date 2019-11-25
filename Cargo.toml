@@ -15,7 +15,8 @@ edition = "2018"
 [dependencies]
 clap = "~2.33.0"
 chrono = "~0.4.9"
-rdkafka = "~0.21.0"
+rdkafka = { git = "https://github.com/fede1024/rust-rdkafka", rev = "3e0ede44" }
+futures = "~0.1"
 dotenv = "~0.15.0"
 zookeeper = "0.5"
 

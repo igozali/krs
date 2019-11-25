@@ -1,13 +1,16 @@
 use chrono::{TimeZone, Utc};
 use clap::{App, SubCommand};
-use rdkafka::consumer::{Consumer, BaseConsumer};
+use futures::future::Future;
+use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
+use rdkafka::client::DefaultClientContext;
+use rdkafka::consumer::{BaseConsumer, Consumer};
 use rdkafka::metadata::MetadataTopic;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use zookeeper::{WatchedEvent, Watcher, ZooKeeper};
 
 use crate::args;
-use crate::{new_consumer, Config, Error, DEFAULT_TIMEOUT};
+use crate::{new_admin_client, new_consumer, Config, Error, DEFAULT_TIMEOUT};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct PartitionInfo {
@@ -72,15 +75,11 @@ pub struct ListCommand {
 
 impl ListCommand {
     pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
-        SubCommand::with_name("list")
-            .about("List topics")
-            .arg(args::brokers())
+        SubCommand::with_name("list").about("List topics")
     }
 
     pub fn run(&self) -> crate::Result<()> {
-        let res = self
-            .consumer
-            .fetch_metadata(None, Some(DEFAULT_TIMEOUT));
+        let res = self.consumer.fetch_metadata(None, Some(DEFAULT_TIMEOUT));
 
         let md = match res {
             Ok(v) => v,
@@ -127,10 +126,8 @@ pub struct DescribeCommand {
 impl DescribeCommand {
     pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
         SubCommand::with_name("describe")
-            .about("Show more info about topic name.")
-            .arg(args::brokers())
+            .about("Show more info about the specified topic.")
             .arg(args::topic())
-            .arg(args::zookeeper())
     }
 
     pub fn run(&self, topic_name: &str) -> crate::Result<()> {
@@ -164,8 +161,8 @@ impl DescribeCommand {
 
 impl From<Config> for DescribeCommand {
     fn from(conf: Config) -> Self {
-        let brokers = conf.brokers.as_ref().unwrap();
-        let zookeeper = conf.zookeeper.as_ref().unwrap();
+        let brokers = conf.brokers.as_ref().expect("brokers is required for `topics describe`");
+        let zookeeper = conf.zookeeper.as_ref().expect("zookeeper is required for `topics describe`");
 
         Self {
             consumer: new_consumer(&brokers),
@@ -174,9 +171,50 @@ impl From<Config> for DescribeCommand {
     }
 }
 
-struct CreateCommand {
-    consumer: BaseConsumer,
-    zk: ZooKeeper
+pub struct CreateCommand {
+    admin: AdminClient<DefaultClientContext>,
 }
 
+impl CreateCommand {
+    pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
+        SubCommand::with_name("create")
+            .about("Creates a new Kafka topic.")
+            .arg(args::topic())
+            .arg(args::num_partitions())
+            .arg(args::num_replicas())
+    }
 
+    pub fn run(
+        &self,
+        topic_name: &str,
+        num_partitions: i32,
+        num_replicas: i32,
+    ) -> crate::Result<()> {
+        let new_topics = &[NewTopic::new(
+            topic_name,
+            num_partitions,
+            TopicReplication::Fixed(num_replicas),
+        )];
+        let admin_options = &AdminOptions::new();
+        let resp = self.admin.create_topics(new_topics, admin_options).wait().map_err(Error::Kafka)?;
+        let res = resp[0]
+            .as_ref()
+            .map(|_| ())
+            .map_err(|(n, e)| Error::Generic(format!("Failed to create topic `{}`. Reason: `{:?}`", n, e)));
+
+        if let Ok(_) = res {
+            println!("{}", topic_name);
+        }
+        res
+    }
+}
+
+impl From<Config> for CreateCommand {
+    fn from(conf: Config) -> Self {
+        let brokers = conf.brokers.as_ref().unwrap();
+
+        Self {
+            admin: new_admin_client(&brokers),
+        }
+    }
+}

@@ -18,7 +18,8 @@ impl From<Config> for ShowCommand {
 
 impl ShowCommand {
     pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
-        SubCommand::with_name("show").help("Shows the current Kafka environment")
+        SubCommand::with_name("show")
+            .about("Shows the current Kafka environment")
     }
 
     pub fn run(&self) -> crate::Result<()> {
@@ -45,16 +46,16 @@ impl SetCommand {
     pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
         SubCommand::with_name("set")
             .about(
-                "Sets default values for some arguments (using the `.env` file in current directory).\n\
-                 Arguments that can be set are listed in options below"
+                "Sets default values for some arguments (by writing to the `.env` file in current directory)"
             )
-            .arg(crate::args::brokers())
-            .arg(crate::args::zookeeper())
     }
 
     pub fn run(self) -> crate::Result<()> {
         let mut brokers = self.config.brokers.value;
         let mut zookeeper = self.config.zookeeper.value;
+        if brokers.is_none() && zookeeper.is_none() {
+            return Err(crate::Error::InvalidUsage("At least one of brokers/zookeeper need to be specified.".to_owned()))
+        }
 
         let mut f = File::create("./.env.new").unwrap();
 
@@ -63,12 +64,15 @@ impl SetCommand {
             for line in BufReader::new(orig).lines().map(|x| x.unwrap()) {
                 if line.starts_with("KRS_BROKERS=") {
                     if let Some(value) = brokers.take() {
-                        f.write(format!("KRS_BROKERS={}\n", value).as_bytes()).unwrap();
+                        // TODO: Should not write if self.config.brokers.source is already ".env file"
+                        f.write_all(format!("KRS_BROKERS={}\n", value).as_bytes())
+                            .unwrap();
                         println!("Written KRS_BROKERS={} to .env", value);
                     }
                 } else if line.starts_with("KRS_ZOOKEEPER") {
                     if let Some(value) = zookeeper.take() {
-                        f.write(format!("KRS_ZOOKEEPER={}\n", value).as_bytes()).unwrap();
+                        f.write_all(format!("KRS_ZOOKEEPER={}\n", value).as_bytes())
+                            .unwrap();
                         println!("Written KRS_ZOOKEEPER={} to .env", value);
                     }
                 }
@@ -77,11 +81,13 @@ impl SetCommand {
 
         // If lines weren't found, then try writing them again at the end.
         if let Some(value) = brokers.take() {
-            f.write(format!("KRS_BROKERS={}\n", value).as_bytes()).unwrap();
+            f.write_all(format!("KRS_BROKERS={}\n", value).as_bytes())
+                .unwrap();
             println!("Written KRS_BROKERS={} to .env", value);
         }
         if let Some(value) = zookeeper.take() {
-            f.write(format!("KRS_ZOOKEEPER={}\n", value).as_bytes()).unwrap();
+            f.write_all(format!("KRS_ZOOKEEPER={}\n", value).as_bytes())
+                .unwrap();
             println!("Written KRS_ZOOKEEPER={} to .env", value);
         }
 
