@@ -18,8 +18,7 @@ impl From<Config> for ShowCommand {
 
 impl ShowCommand {
     pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
-        SubCommand::with_name("show")
-            .about("Shows the current Kafka environment")
+        SubCommand::with_name("show").about("Shows the current Kafka environment")
     }
 
     pub fn run(&self) -> crate::Result<()> {
@@ -54,7 +53,9 @@ impl SetCommand {
         let mut brokers = self.config.brokers.value;
         let mut zookeeper = self.config.zookeeper.value;
         if brokers.is_none() && zookeeper.is_none() {
-            return Err(crate::Error::InvalidUsage("At least one of brokers/zookeeper need to be specified.".to_owned()))
+            return Err(crate::Error::InvalidUsage(
+                "At least one of brokers/zookeeper need to be specified.".to_owned(),
+            ));
         }
 
         let mut f = File::create("./.env.new").unwrap();

@@ -53,7 +53,10 @@ impl TryFrom<&str> for OutputType {
             "table" => Ok(OutputType::Table),
             "csv" => Ok(OutputType::Csv),
             "json" => Ok(OutputType::Json),
-            other => Err(Error::InvalidUsage(format!("Invalid argument for output_type: {}", other))),
+            other => Err(Error::InvalidUsage(format!(
+                "Invalid argument for output_type: {}",
+                other
+            ))),
         }
     }
 }
@@ -200,13 +203,17 @@ impl StringExt for &str {}
 // TODO: This function still looks really ugly. I wonder if I could macro this.
 pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
     fn fail(base: &str, subcmd: &str) -> Result<()> {
-        Err(Error::Generic(
-            if subcmd.len() == 0 {
-                format!("Incomplete subcommand: '{}'! Use -h for more information.", base)
-            } else {
-                format!("Invalid subcommand: '{} {}'! Use -h for more information.", base, subcmd)
-            }
-        ))
+        Err(Error::Generic(if subcmd.len() == 0 {
+            format!(
+                "Incomplete subcommand: '{}'! Use -h for more information.",
+                base
+            )
+        } else {
+            format!(
+                "Invalid subcommand: '{} {}'! Use -h for more information.",
+                base, subcmd
+            )
+        }))
     }
 
     let config = Config::from_env();
@@ -221,10 +228,18 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
                 topics::DescribeCommand::from(config).run(topic_name)
             }
             ("create", Some(ss)) => {
-                let topic_name = ss.value_of("topic").expect("topic name is required for `topics create`");
+                let topic_name = ss
+                    .value_of("topic")
+                    .expect("topic name is required for `topics create`");
                 let num_partitions = ss.value_of("num_partitions").map(|x| x.to_i32()).unwrap();
                 let num_replicas = ss.value_of("num_replicas").map(|x| x.to_i32()).unwrap();
                 topics::CreateCommand::from(config).run(topic_name, num_partitions, num_replicas)
+            }
+            ("delete", Some(ss)) => {
+                let topic_name = ss
+                    .value_of("topic")
+                    .expect("topic name is required for `topics delete`");
+                topics::DeleteCommand::from(config).run(topic_name)
             }
             (unhandled, _) => fail("topics", unhandled),
         },
@@ -254,6 +269,7 @@ pub fn make_parser<'a, 'b>() -> App<'a, 'b> {
                 .about("Topic commands")
                 .subcommand(topics::ListCommand::subcommand())
                 .subcommand(topics::DescribeCommand::subcommand())
-                .subcommand(topics::CreateCommand::subcommand()),
+                .subcommand(topics::CreateCommand::subcommand())
+                .subcommand(topics::DeleteCommand::subcommand()),
         )
 }

@@ -6,7 +6,7 @@ macro_rules! assert_ok {
         if let Err(v) = $x {
             panic!(format!("Expected Ok value, but got {:?}", v));
         }
-    }
+    };
 }
 
 #[test]

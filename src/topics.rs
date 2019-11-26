@@ -161,8 +161,14 @@ impl DescribeCommand {
 
 impl From<Config> for DescribeCommand {
     fn from(conf: Config) -> Self {
-        let brokers = conf.brokers.as_ref().expect("brokers is required for `topics describe`");
-        let zookeeper = conf.zookeeper.as_ref().expect("zookeeper is required for `topics describe`");
+        let brokers = conf
+            .brokers
+            .as_ref()
+            .expect("brokers is required for `topics describe`");
+        let zookeeper = conf
+            .zookeeper
+            .as_ref()
+            .expect("zookeeper is required for `topics describe`");
 
         Self {
             consumer: new_consumer(&brokers),
@@ -196,20 +202,61 @@ impl CreateCommand {
             TopicReplication::Fixed(num_replicas),
         )];
         let admin_options = &AdminOptions::new();
-        let resp = self.admin.create_topics(new_topics, admin_options).wait().map_err(Error::Kafka)?;
-        let res = resp[0]
-            .as_ref()
-            .map(|_| ())
-            .map_err(|(n, e)| Error::Generic(format!("Failed to create topic `{}`. Reason: `{:?}`", n, e)));
+        let rx = self
+            .admin
+            .create_topics(new_topics, admin_options)
+            .wait()
+            .map_err(Error::Kafka)?;
 
-        if let Ok(_) = res {
-            println!("{}", topic_name);
-        }
-        res
+        rx[0]
+            .as_ref()
+            // Print topic name only if successful
+            .map(|t| println!("{}", t))
+            .map_err(|(n, e)| {
+                Error::Generic(format!("Failed to create topic `{}`. Reason: `{:?}`", n, e))
+            })
     }
 }
 
 impl From<Config> for CreateCommand {
+    fn from(conf: Config) -> Self {
+        let brokers = conf.brokers.as_ref().unwrap();
+
+        Self {
+            admin: new_admin_client(&brokers),
+        }
+    }
+}
+
+pub struct DeleteCommand {
+    admin: AdminClient<DefaultClientContext>,
+}
+
+impl DeleteCommand {
+    pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
+        SubCommand::with_name("delete")
+            .about("Deletes the specified Kafka topic.")
+            .arg(args::topic())
+    }
+
+    pub fn run(&self, topic_name: &str) -> crate::Result<()> {
+        let rx = self
+            .admin
+            .delete_topics(&[topic_name], &AdminOptions::new())
+            .wait()
+            .map_err(Error::Kafka)?;
+
+        rx[0]
+            .as_ref()
+            // Print topic name only if successful
+            .map(|t| println!("{}", t))
+            .map_err(|(n, e)| {
+                Error::Generic(format!("Failed to delete topic `{}`. Reason: `{:?}`", n, e))
+            })
+    }
+}
+
+impl From<Config> for DeleteCommand {
     fn from(conf: Config) -> Self {
         let brokers = conf.brokers.as_ref().unwrap();
 
