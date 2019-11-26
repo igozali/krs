@@ -58,22 +58,21 @@ impl SetCommand {
             ));
         }
 
-        let mut f = File::create("./.env.new").unwrap();
+        let mut f = File::create("./.env.new")?;
 
         // If lines for the args already exist in .env, replace them.
         if let Ok(orig) = File::open("./.env") {
+            // TODO: Why does `lines().map(|x| x?)` not work?
             for line in BufReader::new(orig).lines().map(|x| x.unwrap()) {
                 if line.starts_with("KRS_BROKERS=") {
                     if let Some(value) = brokers.take() {
                         // TODO: Should not write if self.config.brokers.source is already ".env file"
-                        f.write_all(format!("KRS_BROKERS={}\n", value).as_bytes())
-                            .unwrap();
+                        f.write_all(format!("KRS_BROKERS={}\n", value).as_bytes())?;
                         println!("Written KRS_BROKERS={} to .env", value);
                     }
                 } else if line.starts_with("KRS_ZOOKEEPER") {
                     if let Some(value) = zookeeper.take() {
-                        f.write_all(format!("KRS_ZOOKEEPER={}\n", value).as_bytes())
-                            .unwrap();
+                        f.write_all(format!("KRS_ZOOKEEPER={}\n", value).as_bytes())?;
                         println!("Written KRS_ZOOKEEPER={} to .env", value);
                     }
                 }
@@ -82,17 +81,15 @@ impl SetCommand {
 
         // If lines weren't found, then try writing them again at the end.
         if let Some(value) = brokers.take() {
-            f.write_all(format!("KRS_BROKERS={}\n", value).as_bytes())
-                .unwrap();
+            f.write_all(format!("KRS_BROKERS={}\n", value).as_bytes())?;
             println!("Written KRS_BROKERS={} to .env", value);
         }
         if let Some(value) = zookeeper.take() {
-            f.write_all(format!("KRS_ZOOKEEPER={}\n", value).as_bytes())
-                .unwrap();
+            f.write_all(format!("KRS_ZOOKEEPER={}\n", value).as_bytes())?;
             println!("Written KRS_ZOOKEEPER={} to .env", value);
         }
 
-        fs::rename("./.env.new", "./.env").unwrap();
+        fs::rename("./.env.new", "./.env")?;
 
         Ok(())
     }

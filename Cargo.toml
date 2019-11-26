@@ -16,9 +16,10 @@ edition = "2018"
 clap = "~2.33.0"
 chrono = "~0.4.9"
 rdkafka = { git = "https://github.com/fede1024/rust-rdkafka", rev = "3e0ede44" }
-futures = "~0.1"
 dotenv = "~0.15.0"
 zookeeper = "0.5"
+futures = "~0.1"
+tokio = "~0.1"
 
 serde = { version = "~1.0", features = ["derive"] }
 

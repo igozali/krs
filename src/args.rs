@@ -27,6 +27,15 @@ pub fn topic<'a, 'b>() -> Arg<'a, 'b> {
         .takes_value(true)
 }
 
+pub fn group_id<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name("group-id")
+        .short("g")
+        .long("--group-id")
+        .help("Kafka consumer group ID")
+        .global(true)
+        .takes_value(true)
+}
+
 pub fn num_partitions<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name("num_partitions")
         .long("--num-partitions")

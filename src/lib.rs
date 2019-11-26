@@ -2,16 +2,17 @@ use std::convert::TryFrom;
 use std::fmt::{Debug, Display};
 use std::time::Duration;
 
+use chrono::offset::Utc;
 use clap::{App, ArgMatches, SubCommand};
 use dotenv;
+use rdkafka::ClientConfig;
 use rdkafka::admin::AdminClient;
 use rdkafka::client::DefaultClientContext;
-use rdkafka::consumer::BaseConsumer;
-use rdkafka::ClientConfig;
+use rdkafka::config::FromClientConfig;
+use rdkafka::consumer::Consumer;
 
 mod args;
-pub mod env;
-pub mod topics;
+pub mod commands;
 pub mod util;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -22,6 +23,7 @@ pub enum Error {
     Generic(String),
     Kafka(rdkafka::error::KafkaError),
     Clap(clap::Error),
+    Io(std::io::Error),
     Other(Box<dyn std::error::Error>),
 }
 
@@ -29,6 +31,18 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // Just use Debug representation
         write!(f, "{:?}", self)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::Io(e)
+    }
+}
+
+impl From<clap::Error> for Error {
+    fn from(e: clap::Error) -> Self {
+        Error::Clap(e)
     }
 }
 
@@ -109,9 +123,11 @@ impl<T: Display> Display for Sourced<Option<T>> {
 #[derive(Debug, Default)]
 pub struct Config {
     pub output_type: Option<OutputType>,
+
     pub brokers: Sourced<Option<String>>,
+    pub group_id: Option<String>,
+
     pub zookeeper: Sourced<Option<String>>,
-    pub topic: Option<String>,
 }
 
 impl Config {
@@ -150,14 +166,14 @@ impl Config {
             output_type: rhs.output_type.or(self.output_type),
             brokers: rhs.brokers.or(self.brokers),
             zookeeper: rhs.zookeeper.or(self.zookeeper),
-            topic: rhs.topic.or(self.topic),
+            group_id: rhs.group_id.or(self.group_id),
         }
     }
 }
 
 impl From<&ArgMatches<'_>> for Config {
     fn from(args: &ArgMatches<'_>) -> Self {
-        let args = args;
+        let default_group_id = format!("krs-{}", Utc::now().timestamp_millis());
         Self {
             output_type: args.value_of("output-type").map(|x| {
                 OutputType::try_from(x).unwrap_or_else(|_| panic!("Invalid output type {}", x))
@@ -170,17 +186,26 @@ impl From<&ArgMatches<'_>> for Config {
                 source: "-z/--zookeeper".into(),
                 value: args.value_of("zookeeper").map(|x| x.to_owned()),
             },
-            topic: args.value_of("topic").map(|x| x.to_owned()),
+            group_id: args.value_of("group-id").map(|x| x.to_owned()).or(Some(default_group_id)),
         }
     }
 }
 
-// Creates a new Kafka consumer with only the para
-fn new_consumer(brokers: &str) -> BaseConsumer {
-    ClientConfig::new()
-        .set("bootstrap.servers", brokers)
-        .create()
-        .unwrap()
+/// Creates a new Kafka consumer with only the parameters I care about.
+fn new_consumer<T>(brokers: &str, group_id: Option<&str>) -> T
+where
+    T: Consumer + FromClientConfig,
+{
+    let mut config = ClientConfig::new();
+    config.set("bootstrap.servers", brokers);
+
+    if let Some(v) = group_id {
+        config.set("group.id", v);
+    }
+
+    println!("Created Consumer(brokers={}, group_id={:?})", brokers, group_id);
+
+    config.create().unwrap()
 }
 
 fn new_admin_client(brokers: &str) -> AdminClient<DefaultClientContext> {
@@ -222,10 +247,10 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
     // FIXME: Commands should implement TryFrom, not From.
     match m.subcommand() {
         ("topics", Some(s)) => match s.subcommand() {
-            ("list", _) => topics::ListCommand::from(config).run(),
+            ("list", _) => commands::topics::ListCommand::from(config).run(),
             ("describe", Some(ss)) => {
                 let topic_name = ss.value_of("topic").unwrap();
-                topics::DescribeCommand::from(config).run(topic_name)
+                commands::topics::DescribeCommand::from(config).run(topic_name)
             }
             ("create", Some(ss)) => {
                 let topic_name = ss
@@ -233,21 +258,27 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
                     .expect("topic name is required for `topics create`");
                 let num_partitions = ss.value_of("num_partitions").map(|x| x.to_i32()).unwrap();
                 let num_replicas = ss.value_of("num_replicas").map(|x| x.to_i32()).unwrap();
-                topics::CreateCommand::from(config).run(topic_name, num_partitions, num_replicas)
+                commands::topics::CreateCommand::from(config).run(topic_name, num_partitions, num_replicas)
             }
             ("delete", Some(ss)) => {
                 let topic_name = ss
                     .value_of("topic")
                     .expect("topic name is required for `topics delete`");
-                topics::DeleteCommand::from(config).run(topic_name)
+                commands::topics::DeleteCommand::from(config).run(topic_name)
             }
             (unhandled, _) => fail("topics", unhandled),
         },
         ("env", Some(s)) => match s.subcommand() {
-            ("show", _) => env::ShowCommand::from(config).run(),
-            ("set", _) => env::SetCommand::from(config).run(),
+            ("show", _) => commands::env::ShowCommand::from(config).run(),
+            ("set", _) => commands::env::SetCommand::from(config).run(),
             (unhandled, _) => fail("env", unhandled),
         },
+        ("consumer", Some(s)) => {
+            let topic_name = s
+                .value_of("topic")
+                .expect("topic name is required for `consumer`");
+            commands::consumer::ConsumerCommand::from(config).run(topic_name)
+        }
         (unhandled, _) => fail("", unhandled),
     }
 }
@@ -256,20 +287,22 @@ pub fn make_parser<'a, 'b>() -> App<'a, 'b> {
     App::new("krs")
         .about("Decent Kafka CLI tool.")
         .arg(args::brokers())
+        .arg(args::group_id())
         .arg(args::zookeeper())
         .arg(args::output_type())
         .subcommand(
             SubCommand::with_name("env")
                 .about("Environment commands")
-                .subcommand(env::ShowCommand::subcommand())
-                .subcommand(env::SetCommand::subcommand()),
-        )
+                .subcommand(commands::env::ShowCommand::subcommand())
+                .subcommand(commands::env::SetCommand::subcommand()),
+            )
         .subcommand(
             SubCommand::with_name("topics")
                 .about("Topic commands")
-                .subcommand(topics::ListCommand::subcommand())
-                .subcommand(topics::DescribeCommand::subcommand())
-                .subcommand(topics::CreateCommand::subcommand())
-                .subcommand(topics::DeleteCommand::subcommand()),
+                .subcommand(commands::topics::ListCommand::subcommand())
+                .subcommand(commands::topics::DescribeCommand::subcommand())
+                .subcommand(commands::topics::CreateCommand::subcommand())
+                .subcommand(commands::topics::DeleteCommand::subcommand()),
         )
+        .subcommand(commands::consumer::ConsumerCommand::subcommand())
 }

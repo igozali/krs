@@ -106,7 +106,7 @@ impl From<Config> for ListCommand {
             .as_ref()
             .expect("brokers is required for `topics list`");
         Self {
-            consumer: new_consumer(&brokers),
+            consumer: new_consumer(&brokers, None),
         }
     }
 }
@@ -127,7 +127,7 @@ impl DescribeCommand {
     pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
         SubCommand::with_name("describe")
             .about("Show more info about the specified topic.")
-            .arg(args::topic())
+            .arg(args::topic().required(true))
     }
 
     pub fn run(&self, topic_name: &str) -> crate::Result<()> {
@@ -171,7 +171,7 @@ impl From<Config> for DescribeCommand {
             .expect("zookeeper is required for `topics describe`");
 
         Self {
-            consumer: new_consumer(&brokers),
+            consumer: new_consumer(&brokers, None),
             zk: ZooKeeper::connect(&zookeeper, DEFAULT_TIMEOUT, DoNothingWatcher).unwrap(),
         }
     }
@@ -185,7 +185,7 @@ impl CreateCommand {
     pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
         SubCommand::with_name("create")
             .about("Creates a new Kafka topic.")
-            .arg(args::topic())
+            .arg(args::topic().required(true))
             .arg(args::num_partitions())
             .arg(args::num_replicas())
     }
@@ -236,7 +236,7 @@ impl DeleteCommand {
     pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
         SubCommand::with_name("delete")
             .about("Deletes the specified Kafka topic.")
-            .arg(args::topic())
+            .arg(args::topic().required(true))
     }
 
     pub fn run(&self, topic_name: &str) -> crate::Result<()> {
