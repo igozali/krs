@@ -2,7 +2,7 @@ use clap::{App, SubCommand};
 use futures::stream::Stream;
 use rdkafka::consumer::{StreamConsumer, Consumer};
 use rdkafka::message::Message;
-use tokio::runtime::current_thread;
+use tokio::runtime::current_thread::Runtime;
 
 use crate::{new_consumer, Config};
 use crate::args;
@@ -23,9 +23,8 @@ impl ConsumerCommand {
             .subscribe(&[topic_name])
             .map_err(|_| crate::Error::Generic("Failed to subscribe to topic".to_owned()))?;
 
-        let mut thread = current_thread::Runtime::new().unwrap();
-
-        let pipeline = self.consumer.start()
+        let pipeline = self.consumer
+            .start()
             .filter_map(|r| match r {
                 Ok(msg) => Some(msg),
                 Err(e) => {
@@ -43,7 +42,8 @@ impl ConsumerCommand {
                 Ok(())
             });
 
-        thread.block_on(pipeline).expect("Unable to start pipeline.");
+        let mut rt = Runtime::new().unwrap();
+        rt.block_on(pipeline).expect("Failed to start consumer pipeline");
         Ok(())
     }
 }

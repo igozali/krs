@@ -14,12 +14,16 @@ edition = "2018"
 
 [dependencies]
 clap = "~2.33.0"
-chrono = "~0.4.9"
-rdkafka = { git = "https://github.com/fede1024/rust-rdkafka", rev = "3e0ede44" }
 dotenv = "~0.15.0"
+chrono = "~0.4.9"
 zookeeper = "0.5"
-futures = "~0.1"
-tokio = "~0.1"
+
+rdkafka = { git = "https://github.com/fede1024/rust-rdkafka", rev = "3e0ede44" }
+# rdkafka depends on futures 0.1.29
+futures = "~0.1.29"
+# No need to move to tokio 0.2 just yet, since rdkafka still hasn't moved to
+# async/await yet
+tokio = "~0.1.22"
 
 serde = { version = "~1.0", features = ["derive"] }
 

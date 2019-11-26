@@ -10,6 +10,7 @@ use rdkafka::admin::AdminClient;
 use rdkafka::client::DefaultClientContext;
 use rdkafka::config::FromClientConfig;
 use rdkafka::consumer::Consumer;
+use rdkafka::producer::FutureProducer;
 
 mod args;
 pub mod commands;
@@ -29,8 +30,7 @@ pub enum Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        // Just use Debug representation
-        write!(f, "{:?}", self)
+        Debug::fmt(self, f)
     }
 }
 
@@ -203,9 +203,16 @@ where
         config.set("group.id", v);
     }
 
-    println!("Created Consumer(brokers={}, group_id={:?})", brokers, group_id);
+    eprintln!("Created Consumer(brokers={}, group_id={:?})", brokers, group_id);
 
     config.create().unwrap()
+}
+
+fn new_producer(brokers: &str) -> FutureProducer {
+    ClientConfig::new()
+        .set("bootstrap.servers", brokers)
+        .create()
+        .unwrap()
 }
 
 fn new_admin_client(brokers: &str) -> AdminClient<DefaultClientContext> {
@@ -266,43 +273,57 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
                     .expect("topic name is required for `topics delete`");
                 commands::topics::DeleteCommand::from(config).run(topic_name)
             }
-            (unhandled, _) => fail("topics", unhandled),
+            // `krs topics` defaults to `krs topics show`
+            (_, _) => commands::topics::ListCommand::from(config).run(),
         },
         ("env", Some(s)) => match s.subcommand() {
             ("show", _) => commands::env::ShowCommand::from(config).run(),
             ("set", _) => commands::env::SetCommand::from(config).run(),
-            (unhandled, _) => fail("env", unhandled),
+            // If only `krs env` is specified, default to `krs env show`
+            (_, _) => commands::env::ShowCommand::from(config).run(),
         },
         ("consumer", Some(s)) => {
             let topic_name = s
                 .value_of("topic")
                 .expect("topic name is required for `consumer`");
             commands::consumer::ConsumerCommand::from(config).run(topic_name)
+        },
+        ("producer", Some(s)) => {
+            let topic_name = s
+                .value_of("topic")
+                .expect("topic name is required for `consumer`");
+            commands::producer::ProducerCommand::from(config).run(topic_name)
         }
         (unhandled, _) => fail("", unhandled),
     }
 }
 
+// TODO: Probably use lazy_static! for this.
 pub fn make_parser<'a, 'b>() -> App<'a, 'b> {
     App::new("krs")
-        .about("Decent Kafka CLI tool.")
+        .author("Ivan Gozali")
+        .version("0.2.0")
+        .about("Simple Kafka CLI tool.")
         .arg(args::brokers())
         .arg(args::group_id())
         .arg(args::zookeeper())
         .arg(args::output_type())
         .subcommand(
             SubCommand::with_name("env")
-                .about("Environment commands")
+                .about("Environment commands (defaults to `env show`).")
+                .long_about("Environment commands.\n\nIf no subcommand to `env` is specified, defaults to `env show`.")
                 .subcommand(commands::env::ShowCommand::subcommand())
                 .subcommand(commands::env::SetCommand::subcommand()),
             )
         .subcommand(
             SubCommand::with_name("topics")
-                .about("Topic commands")
+                .about("Topic commands (defaults to `topics list`).")
+                .long_about("Topic commands.\n\nIf no subcommand to `topics` is specified, will default to `topics list`.")
                 .subcommand(commands::topics::ListCommand::subcommand())
                 .subcommand(commands::topics::DescribeCommand::subcommand())
                 .subcommand(commands::topics::CreateCommand::subcommand())
                 .subcommand(commands::topics::DeleteCommand::subcommand()),
         )
         .subcommand(commands::consumer::ConsumerCommand::subcommand())
+        .subcommand(commands::producer::ProducerCommand::subcommand())
 }
