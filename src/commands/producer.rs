@@ -1,13 +1,13 @@
 use clap::{App, SubCommand};
-use rdkafka::producer::{FutureProducer, FutureRecord};
 use futures::future::Future;
 use futures::stream::Stream;
+use rdkafka::producer::{FutureProducer, FutureRecord};
 
-use crate::{new_producer, Config};
 use crate::args;
+use crate::{new_producer, Config};
 
 pub struct ProducerCommand {
-    producer: FutureProducer
+    producer: FutureProducer,
 }
 
 fn prompt() -> impl Stream<Item = String, Error = std::io::Error> {
@@ -28,7 +28,8 @@ impl ProducerCommand {
         let producer = self.producer.clone();
         let topic_name = topic_name.to_owned();
 
-        let fut = prompt().fuse()
+        let fut = prompt()
+            .fuse()
             .map_err(|e| eprintln!("Error reading line from stdin: {:?}", e))
             .for_each(move |line| {
                 producer
@@ -54,10 +55,13 @@ impl ProducerCommand {
 
 impl From<Config> for ProducerCommand {
     fn from(conf: Config) -> Self {
-        let brokers = conf.brokers.value.expect("brokers is required for `producer`");
+        let brokers = conf
+            .brokers
+            .value
+            .expect("brokers is required for `producer`");
 
         Self {
-            producer: new_producer(&brokers)
+            producer: new_producer(&brokers),
         }
     }
 }

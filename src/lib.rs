@@ -5,12 +5,12 @@ use std::time::Duration;
 use chrono::offset::Utc;
 use clap::{App, ArgMatches, SubCommand};
 use dotenv;
-use rdkafka::ClientConfig;
 use rdkafka::admin::AdminClient;
 use rdkafka::client::DefaultClientContext;
 use rdkafka::config::FromClientConfig;
 use rdkafka::consumer::Consumer;
 use rdkafka::producer::FutureProducer;
+use rdkafka::ClientConfig;
 
 mod args;
 pub mod commands;
@@ -186,7 +186,10 @@ impl From<&ArgMatches<'_>> for Config {
                 source: "-z/--zookeeper".into(),
                 value: args.value_of("zookeeper").map(|x| x.to_owned()),
             },
-            group_id: args.value_of("group-id").map(|x| x.to_owned()).or(Some(default_group_id)),
+            group_id: args
+                .value_of("group-id")
+                .map(|x| x.to_owned())
+                .or(Some(default_group_id)),
         }
     }
 }
@@ -203,7 +206,10 @@ where
         config.set("group.id", v);
     }
 
-    eprintln!("Created Consumer(brokers={}, group_id={:?})", brokers, group_id);
+    eprintln!(
+        "Created Consumer(brokers={}, group_id={:?})",
+        brokers, group_id
+    );
 
     config.create().unwrap()
 }
@@ -265,7 +271,11 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
                     .expect("topic name is required for `topics create`");
                 let num_partitions = ss.value_of("num_partitions").map(|x| x.to_i32()).unwrap();
                 let num_replicas = ss.value_of("num_replicas").map(|x| x.to_i32()).unwrap();
-                commands::topics::CreateCommand::from(config).run(topic_name, num_partitions, num_replicas)
+                commands::topics::CreateCommand::from(config).run(
+                    topic_name,
+                    num_partitions,
+                    num_replicas,
+                )
             }
             ("delete", Some(ss)) => {
                 let topic_name = ss
@@ -287,7 +297,7 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
                 .value_of("topic")
                 .expect("topic name is required for `consumer`");
             commands::consumer::ConsumerCommand::from(config).run(topic_name)
-        },
+        }
         ("producer", Some(s)) => {
             let topic_name = s
                 .value_of("topic")
