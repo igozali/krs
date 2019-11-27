@@ -248,17 +248,17 @@ impl StringExt for &str {}
 // TODO: This function still looks really ugly. I wonder if I could macro this.
 pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
     fn fail(base: &str, subcmd: &str) -> Result<()> {
-        Err(Error::Generic(if subcmd.len() == 0 {
-            format!(
-                "Incomplete subcommand: '{}'! Use -h for more information.",
-                base
-            )
+        let msg = if base.len() == 0 {
+            format!("No subcommand specified. Use -h for more info.")
+        } else if subcmd.len() == 0 {
+            format!("Incomplete subcommand: '{}'! Use -h for more info.", base)
         } else {
             format!(
-                "Invalid subcommand: '{} {}'! Use -h for more information.",
+                "Invalid subcommand: '{} {}'! Use -h for more info.",
                 base, subcmd
             )
-        }))
+        };
+        Err(Error::Generic(msg))
     }
 
     let config = Config::from_env();
