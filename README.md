@@ -65,4 +65,4 @@ Environment:
   a mouthful.
 * JVM startup is annoyingly slow for simple CLI tools.
 * [RIIR](https://github.com/ansuz/RIIR)!
-* But most importantly, I needed a Rust project to learn Rust! :)
+* But most importantly, I just needed a Rust project to learn Rust! :)
