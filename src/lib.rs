@@ -16,6 +16,7 @@ mod args;
 pub mod commands;
 pub mod util;
 
+// TODO: Move to global var as well.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
@@ -31,6 +32,12 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         Debug::fmt(self, f)
+    }
+}
+
+impl From<rdkafka::error::KafkaError> for Error {
+    fn from(e: rdkafka::error::KafkaError) -> Self {
+        Error::Kafka(e)
     }
 }
 
@@ -304,6 +311,7 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
                 .expect("topic name is required for `consumer`");
             commands::producer::ProducerCommand::from(config).run(topic_name)
         }
+        ("wait", Some(_)) => commands::wait::WaitCommand::from(config).run(),
         (unhandled, _) => fail("", unhandled),
     }
 }
@@ -336,4 +344,5 @@ pub fn make_parser<'a, 'b>() -> App<'a, 'b> {
         )
         .subcommand(commands::consumer::ConsumerCommand::subcommand())
         .subcommand(commands::producer::ProducerCommand::subcommand())
+        .subcommand(commands::wait::WaitCommand::subcommand())
 }

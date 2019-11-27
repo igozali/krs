@@ -22,7 +22,7 @@ struct PartitionInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
-struct TopicInfo {
+pub(crate) struct TopicInfo {
     name: String,
     partitions: Vec<PartitionInfo>,
     // Both the fields below are only retrieved in DescribeCommand
@@ -51,9 +51,9 @@ impl From<&MetadataTopic> for TopicInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct ShortTopicInfo {
-    name: String,
-    num_partitions: usize,
+pub(crate) struct ShortTopicInfo {
+    pub name: String,
+    pub num_partitions: usize,
     // TODO: Get from zookeeper.
     //replication_factor: usize
     //ctime: Instant,
@@ -79,17 +79,7 @@ impl ListCommand {
     }
 
     pub fn run(&self) -> crate::Result<()> {
-        let res = self.consumer.fetch_metadata(None, Some(DEFAULT_TIMEOUT));
-
-        let md = match res {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(Error::Generic(format!(
-                    "Error while fetching metadata. {:?}",
-                    e
-                )))
-            }
-        };
+        let md = self.consumer.fetch_metadata(None, Some(DEFAULT_TIMEOUT))?;
 
         let topics = md.topics();
         let infos: Vec<ShortTopicInfo> = topics.iter().map(|t| t.into()).collect();

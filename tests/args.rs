@@ -1,8 +1,8 @@
 #[cfg(test)]
 use chrono::Utc;
 
+use krs::commands::topics::{CreateCommand, DescribeCommand, ListCommand};
 use krs::{make_parser, Config, Sourced};
-use krs::commands::topics::{ListCommand, CreateCommand, DescribeCommand};
 
 macro_rules! assert_ok {
     ($x:expr) => {
@@ -40,7 +40,7 @@ fn test_list_topics_runs() {
     let cmd = ListCommand::from(Config {
         brokers: Sourced {
             source: "test".to_owned(),
-            value: Some("localhost:9092".to_owned())
+            value: Some("localhost:9092".to_owned()),
         },
         ..Default::default()
     });
@@ -54,7 +54,7 @@ fn test_create_and_describe_topics() {
     let cmd = CreateCommand::from(Config {
         brokers: Sourced {
             source: "test".to_owned(),
-            value: Some("localhost:9092".to_owned())
+            value: Some("localhost:9092".to_owned()),
         },
         ..Default::default()
     });
@@ -66,11 +66,11 @@ fn test_create_and_describe_topics() {
     let cmd = DescribeCommand::from(Config {
         brokers: Sourced {
             source: "test".to_owned(),
-            value: Some("localhost:9092".to_owned())
+            value: Some("localhost:9092".to_owned()),
         },
         zookeeper: Sourced {
             source: "test".to_owned(),
-            value: Some("localhost:2181".to_owned())
+            value: Some("localhost:2181".to_owned()),
         },
         ..Default::default()
     });
