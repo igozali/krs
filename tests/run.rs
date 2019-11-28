@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod util;
 
-use chrono::Utc;
+use std::time::Duration;
+
+use rand::random;
 
 use krs::commands::topics::{CreateCommand, DeleteCommand, DescribeCommand, ListCommand};
 use krs::{Config, Sourced};
@@ -31,7 +33,7 @@ fn test_create_and_describe_topics() {
         ..Default::default()
     });
 
-    let topic_name = format!("krs-topic-{}", Utc::now().timestamp_millis());
+    let topic_name = format!("krs-topic-{}", random::<u64>());
 
     assert_ok!(cmd.run(&topic_name, 1, 1));
 
@@ -60,9 +62,12 @@ fn test_create_and_delete_topics() {
         ..Default::default()
     });
 
-    let topic_name = format!("krs-topic-{}", Utc::now().timestamp_millis());
+    let topic_name = format!("krs-topic-{}", random::<u64>());
 
     assert_ok!(cmd.run(&topic_name, 1, 1));
+
+    // Apparently topics aren't immediately available after creation.
+    std::thread::sleep(Duration::from_secs(1));
 
     let cmd = DeleteCommand::from(Config {
         brokers: Sourced {

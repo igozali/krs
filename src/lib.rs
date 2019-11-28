@@ -162,6 +162,7 @@ impl Config {
     fn from_dotenv() -> Self {
         // Will be undeprecated at some point.
         // https://github.com/dotenv-rs/dotenv/issues/13
+        #[allow(deprecated)]
         let vars: HashMap<String, String> = dotenv::from_path_iter("./.env")
             .map(|itr| itr.map(|x| x.ok()).flatten().collect())
             .unwrap_or(HashMap::new());
