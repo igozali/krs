@@ -1,7 +1,10 @@
 use chrono::{TimeZone, Utc};
 use clap::{App, SubCommand};
 use futures::future::Future;
-use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
+// TODO: Need this line after fixing AdminClient hack
+// use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
+// TODO: Remove this line after fixing AdminClient hack
+use crate::hack::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::client::DefaultClientContext;
 use rdkafka::consumer::{BaseConsumer, Consumer};
 use rdkafka::metadata::MetadataTopic;
@@ -195,8 +198,9 @@ impl CreateCommand {
         let rx = self
             .admin
             .create_topics(new_topics, admin_options)
-            .wait()
-            .map_err(Error::Kafka)?;
+            .wait()?;
+            // TODO: Need this line after fixing AdminClient hack
+            // .map_err(Error::Kafka)?;
 
         rx[0]
             .as_ref()
@@ -233,8 +237,9 @@ impl DeleteCommand {
         let rx = self
             .admin
             .delete_topics(&[topic_name], &AdminOptions::new())
-            .wait()
-            .map_err(Error::Kafka)?;
+            .wait()?;
+            // TODO: Need this line after fixing AdminClient hack
+            // .map_err(Error::Kafka)?;
 
         rx[0]
             .as_ref()

@@ -24,7 +24,10 @@ dotenv = "~0.15.0"
 chrono = "~0.4.9"
 zookeeper = "0.5"
 
-rdkafka = { git = "https://github.com/fede1024/rust-rdkafka", rev = "3e0ede44" }
+rdkafka = "~0.21.0"
+# Don't really need 2 packages below this, only for temporary hack
+rdkafka-sys = "~1.0.0"
+log = "~0.3.9"
 # rdkafka depends on futures 0.1.29
 futures = "~0.1.29"
 # No need to move to tokio 0.2 just yet, since rdkafka still hasn't moved to

@@ -6,7 +6,10 @@ use std::time::Duration;
 use chrono::offset::Utc;
 use clap::{App, ArgMatches, SubCommand};
 use dotenv;
-use rdkafka::admin::AdminClient;
+// TODO: Need this line after fixing AdminClient hack
+// use rdkafka::admin::AdminClient;
+// TODO: Remove this line after fixing AdminClient hack
+use crate::hack::AdminClient;
 use rdkafka::client::DefaultClientContext;
 use rdkafka::config::FromClientConfig;
 use rdkafka::consumer::Consumer;
@@ -14,6 +17,7 @@ use rdkafka::producer::FutureProducer;
 use rdkafka::ClientConfig;
 
 mod args;
+mod hack;
 pub mod commands;
 
 // TODO: Move to global var as well.
@@ -24,6 +28,7 @@ pub enum Error {
     InvalidUsage(String),
     Generic(String),
     Kafka(rdkafka::error::KafkaError),
+    RDKafka(rdkafka_sys::types::RDKafkaError),
     Clap(clap::Error),
     Io(std::io::Error),
     Other(Box<dyn std::error::Error>),
