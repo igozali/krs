@@ -78,6 +78,14 @@ with previous ones).
 
 Mostly tested with `Kafka 2.1.1-cp1 (Commit:9aa84c2aaa91e392)`.
 
+### Caveats
+
+At the moment, I'm depending on an unpublished version of
+[rust-rdkafka](https://github.com/fede1024/rust-rdkafka) to get access to the
+AdminClient. When [this
+issue](https://github.com/fede1024/rust-rdkafka/issues/179) is fixed, I'll fix
+this on my side.
+
 ### Upcoming Features
 
 _Note: There will be no guarantees as to when these features are going to be
