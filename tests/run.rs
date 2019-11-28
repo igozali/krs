@@ -3,8 +3,8 @@ mod util;
 
 use chrono::Utc;
 
-use krs::{Config, Sourced};
 use krs::commands::topics::{CreateCommand, DeleteCommand, DescribeCommand, ListCommand};
+use krs::{Config, Sourced};
 
 #[test]
 fn test_list_topics_runs() {

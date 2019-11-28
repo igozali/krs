@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display};
 use std::time::Duration;
@@ -138,6 +139,12 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn init(args: &ArgMatches<'_>) -> Self {
+        Config::from_env()
+            .merge(Config::from_dotenv())
+            .merge(Config::from(args))
+    }
+
     fn from_env() -> Self {
         Self {
             brokers: Sourced {
@@ -153,14 +160,20 @@ impl Config {
     }
 
     fn from_dotenv() -> Self {
+        // Will be undeprecated at some point.
+        // https://github.com/dotenv-rs/dotenv/issues/13
+        let vars: HashMap<String, String> = dotenv::from_path_iter("./.env")
+            .map(|itr| itr.map(|x| x.ok()).flatten().collect())
+            .unwrap_or(HashMap::new());
+
         Self {
             brokers: Sourced {
                 source: ".env file (KRS_BROKERS)".to_owned(),
-                value: dotenv::var("KRS_BROKERS").ok(),
+                value: vars.get("KRS_BROKERS").map(|x| x.to_owned()),
             },
             zookeeper: Sourced {
                 source: ".env file (KRS_ZOOKEEPER)".to_owned(),
-                value: dotenv::var("KRS_ZOOKEEPER").ok(),
+                value: vars.get("KRS_ZOOKEEPER").map(|x| x.to_owned()),
             },
             ..Default::default()
         }
@@ -261,10 +274,8 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
         Err(Error::Generic(msg))
     }
 
-    let config = Config::from_env();
-    let config = config.merge(Config::from_dotenv());
-    let config = config.merge(Config::from(&m));
-    // FIXME: Commands should implement TryFrom, not From.
+    let config = Config::init(&m);
+    // FIXME: Commands should implement TryFrom(config), not From.
     match m.subcommand() {
         ("topics", Some(s)) => match s.subcommand() {
             ("list", _) => commands::topics::ListCommand::from(config).run(),
