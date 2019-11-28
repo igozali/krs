@@ -1,0 +1,32 @@
+# vim: ts=2 sw=2 :
+---
+language: rust
+
+services:
+  - docker
+jobs:
+  allow_failures:
+    - rust: nightly
+  include:
+    # MSRV
+    - os: linux
+      arch: amd64
+      rust: 1.39.0
+    # The Rust team appreciates testing against the beta and nightly channels,
+    # even if you're only targeting stable.
+    # https://docs.travis-ci.com/user/languages/rust
+    - os: linux
+      arch: amd64
+      rust: stable
+      env: KRS_RUN_TESTS=1
+    - os: linux
+      arch: amd64
+      rust: beta
+    - os: linux
+      arch: amd64
+      rust: nightly
+    - os: osx
+      rust: stable
+
+script:
+  - if [[ "$KRS_RUN_TESTS" ]]; then ./test.sh; else cargo build --verbose; fi
