@@ -15,7 +15,6 @@ use rdkafka::ClientConfig;
 
 mod args;
 pub mod commands;
-pub mod util;
 
 // TODO: Move to global var as well.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
