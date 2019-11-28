@@ -332,7 +332,7 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
 pub fn make_parser<'a, 'b>() -> App<'a, 'b> {
     App::new("krs")
         .author("Ivan Gozali")
-        .version("0.2.0")
+        .version(env!("GIT_DESCRIPTION"))
         .about("Simple Kafka CLI tool.")
         .arg(args::brokers())
         .arg(args::group_id())

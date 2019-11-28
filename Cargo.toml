@@ -11,6 +11,7 @@ keywords = ["kafka", "rdkafka", "consumer", "producer"]
 categories = ["command-line-utilities"]
 license = "Unlicense OR MIT"
 edition = "2018"
+build = "build.rs"
 
 [[bin]]
 bench = false
