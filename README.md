@@ -2,6 +2,9 @@ krs
 ---
 krs is a simple Kafka command-line tool written in Rust, inspired by [kt](https://github.com/fgeller/kt).
 
+[![crates.io](https://img.shields.io/crates/v/krs.svg)](https://crates.io/crates/krs)
+[![Build Status](https://travis-ci.org/igozali/krs.svg?branch=master)](https://travis-ci.org/igozali/krs)
+
 Dual-licensed under MIT or the [UNLICENSE](https://unlicense.org/).
 
 ### Features
