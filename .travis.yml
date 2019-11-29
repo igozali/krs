@@ -28,5 +28,15 @@ jobs:
     - os: osx
       rust: stable
 
+before_script:
+  - if [[ "$KRS_RUN_TESTS" ]]; then rustup component add clippy rustfmt; fi
+
 script:
-  - if [[ "$KRS_RUN_TESTS" ]]; then ./test.sh; else cargo build --verbose; fi
+  - |
+    if [[ "$KRS_RUN_TESTS" ]]; then
+      cargo fmt -- --check &&
+      cargo clippy --all-targets -- -D warnings &&
+      ./test.sh
+    else
+      cargo build --verbose
+    fi
