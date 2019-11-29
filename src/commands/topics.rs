@@ -195,12 +195,9 @@ impl CreateCommand {
             TopicReplication::Fixed(num_replicas),
         )];
         let admin_options = &AdminOptions::new();
-        let rx = self
-            .admin
-            .create_topics(new_topics, admin_options)
-            .wait()?;
-            // TODO: Need this line after fixing AdminClient hack
-            // .map_err(Error::Kafka)?;
+        let rx = self.admin.create_topics(new_topics, admin_options).wait()?;
+        // TODO: Need this line after fixing AdminClient hack
+        // .map_err(Error::Kafka)?;
 
         rx[0]
             .as_ref()
@@ -238,8 +235,8 @@ impl DeleteCommand {
             .admin
             .delete_topics(&[topic_name], &AdminOptions::new())
             .wait()?;
-            // TODO: Need this line after fixing AdminClient hack
-            // .map_err(Error::Kafka)?;
+        // TODO: Need this line after fixing AdminClient hack
+        // .map_err(Error::Kafka)?;
 
         rx[0]
             .as_ref()

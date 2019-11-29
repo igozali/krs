@@ -17,8 +17,8 @@ use rdkafka::producer::FutureProducer;
 use rdkafka::ClientConfig;
 
 mod args;
-mod hack;
 pub mod commands;
+mod hack;
 
 // TODO: Move to global var as well.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -169,7 +169,7 @@ impl Config {
         #[allow(deprecated)]
         let vars: HashMap<String, String> = dotenv::from_path_iter("./.env")
             .map(|itr| itr.map(|x| x.ok()).flatten().collect())
-            .unwrap_or(HashMap::new());
+            .unwrap_or_default();
 
         Self {
             brokers: Sourced {
@@ -266,9 +266,9 @@ impl StringExt for &str {}
 // TODO: This function still looks really ugly. I wonder if I could macro this.
 pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
     fn fail(base: &str, subcmd: &str) -> Result<()> {
-        let msg = if base.len() == 0 {
-            format!("No subcommand specified. Use -h for more info.")
-        } else if subcmd.len() == 0 {
+        let msg = if base.is_empty() {
+            "No subcommand specified. Use -h for more info.".to_string()
+        } else if subcmd.is_empty() {
             format!("Incomplete subcommand: '{}'! Use -h for more info.", base)
         } else {
             format!(

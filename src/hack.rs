@@ -16,9 +16,9 @@ use rdkafka::util::{cstr_to_owned, IntoOpaque};
 use futures::future::{self, Either};
 use futures::{Async, Canceled, Complete, Future, Oneshot, Poll};
 
-use std::os::raw::c_char;
 use std::ffi::{CStr, CString};
 use std::mem;
+use std::os::raw::c_char;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -69,15 +69,16 @@ impl From<Option<Duration>> for Timeout {
 }
 
 pub(crate) fn timeout_to_ms<T: Into<Option<Duration>>>(timeout: T) -> i32 {
-    timeout
-        .into()
-        .map(|t| t.as_millis() as i32)
-        .unwrap_or(-1)
+    timeout.into().map(|t| t.as_millis() as i32).unwrap_or(-1)
 }
 
-
+/// # Safety
+///
+/// Not sure, just a temporary hack.
 pub unsafe fn bytes_cstr_to_owned(bytes_cstr: &[i8]) -> String {
-    CStr::from_ptr(bytes_cstr.as_ptr() as *const c_char).to_string_lossy().into_owned()
+    CStr::from_ptr(bytes_cstr.as_ptr() as *const c_char)
+        .to_string_lossy()
+        .into_owned()
 }
 
 pub(crate) trait WrappedCPointer {
@@ -101,9 +102,8 @@ impl<T: WrappedCPointer> AsCArray<T> for Vec<T> {
     }
 }
 
-
 pub(crate) struct NativeQueue {
-    ptr: *mut RDKafkaQueue
+    ptr: *mut RDKafkaQueue,
 }
 
 // The library is completely thread safe, according to the documentation.
@@ -138,14 +138,16 @@ impl Drop for NativeQueue {
 }
 
 pub(crate) struct ErrBuf {
-    buf: [c_char; ErrBuf::MAX_ERR_LEN]
+    buf: [c_char; ErrBuf::MAX_ERR_LEN],
 }
 
 impl ErrBuf {
     const MAX_ERR_LEN: usize = 512;
 
     pub fn new() -> ErrBuf {
-        ErrBuf { buf: [0; ErrBuf::MAX_ERR_LEN] }
+        ErrBuf {
+            buf: [0; ErrBuf::MAX_ERR_LEN],
+        }
     }
 
     pub fn as_mut_ptr(&mut self) -> *mut i8 {
@@ -155,9 +157,11 @@ impl ErrBuf {
     pub fn len(&self) -> usize {
         self.buf.len()
     }
+}
 
-    pub fn to_string(&self) -> String {
-        unsafe { bytes_cstr_to_owned(&self.buf) }
+impl std::fmt::Display for ErrBuf {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", unsafe { bytes_cstr_to_owned(&self.buf) })
     }
 }
 
@@ -296,9 +300,7 @@ impl FromClientConfig for AdminClient<DefaultClientContext> {
 }
 
 fn new_native_queue<C: ClientContext>(client: &Client<C>) -> NativeQueue {
-    unsafe {
-        NativeQueue::from_ptr(rdsys::rd_kafka_queue_new(client.native_ptr()))
-    }
+    unsafe { NativeQueue::from_ptr(rdsys::rd_kafka_queue_new(client.native_ptr())) }
 }
 
 impl<C: ClientContext> FromClientConfigAndContext<C> for AdminClient<C> {
@@ -594,7 +596,7 @@ pub type TopicResult = Result<String, (String, RDKafkaError)>;
 fn build_topic_results(topics: *const *const RDKafkaTopicResult, n: usize) -> Vec<TopicResult> {
     let mut out = Vec::with_capacity(n);
     for i in 0..n {
-        let topic = unsafe { *topics.offset(i as isize) };
+        let topic = unsafe { *topics.add(i) };
         let name = unsafe { cstr_to_owned(rdsys::rd_kafka_topic_result_name(topic)) };
         let err = unsafe { rdsys::rd_kafka_topic_result_error(topic) };
         if err.is_error() {
@@ -611,7 +613,6 @@ impl From<std::ffi::NulError> for crate::Error {
         crate::Error::Other(Box::new(err))
     }
 }
-
 
 //
 // Create topic handling
@@ -686,7 +687,7 @@ impl<'a> NewTopic<'a> {
         // installation fails.
         let topic = unsafe { NativeNewTopic::from_ptr(topic) };
         if let TopicReplication::Variable(assignment) = self.replication {
-            for (partition_id, broker_ids) in assignment.into_iter().enumerate() {
+            for (partition_id, broker_ids) in assignment.iter().enumerate() {
                 let res = unsafe {
                     rdsys::rd_kafka_NewTopic_set_replica_assignment(
                         topic.ptr(),
@@ -851,4 +852,3 @@ impl Future for DeleteTopicsFuture {
         }
     }
 }
-
