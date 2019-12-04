@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader, Write};
 
 use clap::{App, SubCommand};
 
-use crate::Config;
+use crate::{Config, Sourced, BROKERS_ENV_KEY, ZOOKEEPER_ENV_KEY};
 
 pub struct ShowCommand {
     config: Config,
@@ -23,8 +23,8 @@ impl ShowCommand {
 
     pub fn run(&self) -> crate::Result<()> {
         println!("Environment: ");
-        println!("  brokers: {}", self.config.brokers);
-        println!("  zookeeper: {}", self.config.zookeeper);
+        println!("  brokers: {:?}", self.config.brokers);
+        println!("  zookeeper: {:?}", self.config.zookeeper);
 
         Ok(())
     }
@@ -41,6 +41,21 @@ impl From<Config> for SetCommand {
     }
 }
 
+// If there's some value in the option, "consume" the option by replacing
+// the contents with None and writing it to the file. Else, just pass.
+fn maybe_write(
+    f: &mut File,
+    value: &mut Option<Sourced<String>>,
+    key: &str,
+) -> std::io::Result<()> {
+    if let Some(sourced) = value.take() {
+        println!("Writing {}={} to .env", key, sourced.value);
+        f.write_all(format!("{}={}\n", key, sourced.value).as_bytes())
+    } else {
+        Ok(())
+    }
+}
+
 impl SetCommand {
     pub fn subcommand<'a, 'b>() -> App<'a, 'b> {
         SubCommand::with_name("set")
@@ -50,8 +65,8 @@ impl SetCommand {
     }
 
     pub fn run(self) -> crate::Result<()> {
-        let mut brokers = self.config.brokers.value;
-        let mut zookeeper = self.config.zookeeper.value;
+        let mut brokers = self.config.brokers;
+        let mut zookeeper = self.config.zookeeper;
         if brokers.is_none() && zookeeper.is_none() {
             return Err(crate::Error::InvalidUsage(
                 "At least one of brokers/zookeeper need to be specified.".to_owned(),
@@ -64,30 +79,20 @@ impl SetCommand {
         if let Ok(orig) = File::open("./.env") {
             // TODO: Why does `lines().map(|x| x?)` not work?
             for line in BufReader::new(orig).lines().map(|x| x.unwrap()) {
-                if line.starts_with("KRS_BROKERS=") {
-                    if let Some(value) = brokers.take() {
-                        // TODO: Should not write if self.config.brokers.source is already ".env file"
-                        f.write_all(format!("KRS_BROKERS={}\n", value).as_bytes())?;
-                        println!("Written KRS_BROKERS={} to .env", value);
-                    }
-                } else if line.starts_with("KRS_ZOOKEEPER") {
-                    if let Some(value) = zookeeper.take() {
-                        f.write_all(format!("KRS_ZOOKEEPER={}\n", value).as_bytes())?;
-                        println!("Written KRS_ZOOKEEPER={} to .env", value);
-                    }
+                if line.starts_with(BROKERS_ENV_KEY) {
+                    // TODO: Should not write if self.config.brokers.source is already ".env file"
+                    maybe_write(&mut f, &mut brokers, BROKERS_ENV_KEY)?;
+                } else if line.starts_with(ZOOKEEPER_ENV_KEY) {
+                    maybe_write(&mut f, &mut zookeeper, ZOOKEEPER_ENV_KEY)?;
+                } else {
+                    f.write_all(format!("{}\n", line).as_bytes())?;
                 }
             }
         }
 
         // If lines weren't found, then try writing them again at the end.
-        if let Some(value) = brokers.take() {
-            f.write_all(format!("KRS_BROKERS={}\n", value).as_bytes())?;
-            println!("Written KRS_BROKERS={} to .env", value);
-        }
-        if let Some(value) = zookeeper.take() {
-            f.write_all(format!("KRS_ZOOKEEPER={}\n", value).as_bytes())?;
-            println!("Written KRS_ZOOKEEPER={} to .env", value);
-        }
+        maybe_write(&mut f, &mut brokers, BROKERS_ENV_KEY)?;
+        maybe_write(&mut f, &mut zookeeper, ZOOKEEPER_ENV_KEY)?;
 
         fs::rename("./.env.new", "./.env")?;
 

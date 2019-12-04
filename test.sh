@@ -1,6 +1,7 @@
 #!/bin/bash
 # See https://stackoverflow.com/questions/59077877 regarding running
 # a teardown function after `cargo run` finishes.
+set -euo pipefail
 
 docker-compose down || :
 docker-compose up -d

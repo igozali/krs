@@ -1,5 +1,7 @@
 #[cfg(test)]
+// TODO: https://github.com/rust-lang/rust/issues/46379
 mod util;
+pub use util::*;
 
 use std::env;
 use std::fs::File;
@@ -18,7 +20,10 @@ fn test_global_args() {
         .unwrap();
     let config = Config::from(&matches);
 
-    assert_eq!(config.brokers.value, Some("localhost:9092".to_owned()));
+    assert_eq!(
+        config.brokers.map(|x| x.value),
+        Some("localhost:9092".to_owned())
+    );
 
     let parser = make_parser();
     let matches = parser
@@ -26,7 +31,10 @@ fn test_global_args() {
         .unwrap();
     let config = Config::from(&matches);
 
-    assert_eq!(config.brokers.value, Some("localhost:9092".to_owned()));
+    assert_eq!(
+        config.brokers.map(|x| x.value),
+        Some("localhost:9092".to_owned())
+    );
 }
 
 #[test]
@@ -48,8 +56,9 @@ fn test_sourced_configs_precedence() {
             .unwrap(),
     );
 
-    assert_eq!(config.brokers.source, "env var (KRS_BROKERS)".to_owned());
-    assert_eq!(config.brokers.value, Some("kafka_from_env".to_owned()));
+    let actual = config.brokers.unwrap();
+    assert_eq!(actual.source, "env var (KRS_BROKERS)".to_owned());
+    assert_eq!(actual.value, "kafka_from_env".to_owned());
 
     let parser = make_parser();
     let config = Config::init(
@@ -58,12 +67,12 @@ fn test_sourced_configs_precedence() {
             .unwrap(),
     );
 
-    assert_eq!(config.brokers.source, "-b/--brokers".to_owned());
-    assert_eq!(config.brokers.value, Some("kafka_from_cli".to_owned()));
+    let actual = config.brokers.unwrap();
+    assert_eq!(actual.source, "-b/--brokers".to_owned());
+    assert_eq!(actual.value, "kafka_from_cli".to_owned());
 
     let mut f = File::create("./.env").unwrap();
-    f.write_all("KRS_BROKERS=kafka_from_dotenv\n".as_bytes())
-        .unwrap();
+    f.write_all(b"KRS_BROKERS=kafka_from_dotenv\n").unwrap();
 
     let parser = make_parser();
     let config = Config::init(
@@ -72,8 +81,9 @@ fn test_sourced_configs_precedence() {
             .unwrap(),
     );
 
-    assert_eq!(config.brokers.source, ".env file (KRS_BROKERS)".to_owned());
-    assert_eq!(config.brokers.value, Some("kafka_from_dotenv".to_owned()));
+    let actual = config.brokers.unwrap();
+    assert_eq!(actual.source, ".env file (KRS_BROKERS)".to_owned());
+    assert_eq!(actual.value, "kafka_from_dotenv".to_owned());
 
     let parser = make_parser();
     let config = Config::init(
@@ -82,8 +92,9 @@ fn test_sourced_configs_precedence() {
             .unwrap(),
     );
 
-    assert_eq!(config.brokers.source, "-b/--brokers".to_owned());
-    assert_eq!(config.brokers.value, Some("kafka_from_cli".to_owned()));
+    let actual = config.brokers.unwrap();
+    assert_eq!(actual.source, "-b/--brokers".to_owned());
+    assert_eq!(actual.value, "kafka_from_cli".to_owned());
 }
 
 // test that running krs prints usage

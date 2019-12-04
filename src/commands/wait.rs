@@ -40,7 +40,7 @@ impl WaitCommand {
 
 impl From<Config> for WaitCommand {
     fn from(conf: Config) -> Self {
-        let brokers = conf.brokers.value.expect("brokers is required for `wait`");
+        let brokers = conf.brokers.expect("brokers is required for `wait`").value;
 
         Self {
             consumer: new_consumer(&brokers, None),

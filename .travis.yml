@@ -2,6 +2,8 @@
 ---
 language: rust
 
+cache: cargo
+
 services:
   - docker
 jobs:
@@ -36,7 +38,7 @@ script:
     if [[ "$KRS_RUN_TESTS" ]]; then
       cargo fmt -- --check &&
       cargo clippy --all-targets -- -D warnings &&
-      ./test.sh
+      ./test.sh --no-fail-fast
     else
       cargo build --verbose
     fi

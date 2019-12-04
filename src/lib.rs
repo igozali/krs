@@ -23,6 +23,9 @@ mod hack;
 // TODO: Move to global var as well.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
+pub const BROKERS_ENV_KEY: &str = "KRS_BROKERS";
+pub const ZOOKEEPER_ENV_KEY: &str = "KRS_ZOOKEEPER";
+
 #[derive(Debug)]
 pub enum Error {
     InvalidUsage(String),
@@ -95,20 +98,11 @@ pub struct Sourced<T> {
     pub value: T,
 }
 
-impl<T> Sourced<Option<T>> {
-    fn or(self, other: Sourced<Option<T>>) -> Sourced<Option<T>> {
-        match self.value {
-            Some(_) => self,
-            None => other,
-        }
-    }
-}
-
-impl<T> Default for Sourced<Option<T>> {
-    fn default() -> Self {
+impl<T> Sourced<T> {
+    pub fn new(source: &str, value: T) -> Self {
         Self {
-            source: "unknown".to_owned(),
-            value: None,
+            source: source.to_owned(),
+            value,
         }
     }
 }
@@ -121,12 +115,9 @@ impl<T> std::ops::Deref for Sourced<T> {
     }
 }
 
-impl<T: Display> Display for Sourced<Option<T>> {
+impl<T: Display> Display for Sourced<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match &self.value {
-            Some(v) => write!(f, "{} (from {})", v, self.source),
-            None => write!(f, "None"),
-        }
+        write!(f, "{} (from {})", self.value, self.source)
     }
 }
 
@@ -136,10 +127,10 @@ impl<T: Display> Display for Sourced<Option<T>> {
 pub struct Config {
     pub output_type: Option<OutputType>,
 
-    pub brokers: Sourced<Option<String>>,
+    pub brokers: Option<Sourced<String>>,
     pub group_id: Option<String>,
 
-    pub zookeeper: Sourced<Option<String>>,
+    pub zookeeper: Option<Sourced<String>>,
 }
 
 impl Config {
@@ -151,14 +142,12 @@ impl Config {
 
     fn from_env() -> Self {
         Self {
-            brokers: Sourced {
-                source: "env var (KRS_BROKERS)".to_owned(),
-                value: std::env::var("KRS_BROKERS").ok(),
-            },
-            zookeeper: Sourced {
-                source: "env var (KRS_ZOOKEEPER)".to_owned(),
-                value: std::env::var("KRS_ZOOKEEPER").ok(),
-            },
+            brokers: std::env::var(BROKERS_ENV_KEY)
+                .ok()
+                .map(|value| Sourced::new(&format!("env var ({})", BROKERS_ENV_KEY), value)),
+            zookeeper: std::env::var(ZOOKEEPER_ENV_KEY)
+                .ok()
+                .map(|value| Sourced::new(&format!(".env file ({})", ZOOKEEPER_ENV_KEY), value)),
             ..Default::default()
         }
     }
@@ -172,14 +161,18 @@ impl Config {
             .unwrap_or_default();
 
         Self {
-            brokers: Sourced {
-                source: ".env file (KRS_BROKERS)".to_owned(),
-                value: vars.get("KRS_BROKERS").map(|x| x.to_owned()),
-            },
-            zookeeper: Sourced {
-                source: ".env file (KRS_ZOOKEEPER)".to_owned(),
-                value: vars.get("KRS_ZOOKEEPER").map(|x| x.to_owned()),
-            },
+            brokers: vars.get(BROKERS_ENV_KEY).map(|value| {
+                Sourced::new(
+                    &format!(".env file ({})", BROKERS_ENV_KEY),
+                    value.to_owned(),
+                )
+            }),
+            zookeeper: vars.get(ZOOKEEPER_ENV_KEY).map(|value| {
+                Sourced::new(
+                    &format!(".env file ({})", ZOOKEEPER_ENV_KEY),
+                    value.to_owned(),
+                )
+            }),
             ..Default::default()
         }
     }
@@ -203,14 +196,12 @@ impl From<&ArgMatches<'_>> for Config {
             output_type: args.value_of("output-type").map(|x| {
                 OutputType::try_from(x).unwrap_or_else(|_| panic!("Invalid output type {}", x))
             }),
-            brokers: Sourced {
-                source: "-b/--brokers".into(),
-                value: args.value_of("brokers").map(|x| x.to_owned()),
-            },
-            zookeeper: Sourced {
-                source: "-z/--zookeeper".into(),
-                value: args.value_of("zookeeper").map(|x| x.to_owned()),
-            },
+            brokers: args
+                .value_of("brokers")
+                .map(|value| Sourced::new("-b/--brokers", value.to_owned())),
+            zookeeper: args
+                .value_of("zookeeper")
+                .map(|value| Sourced::new("-z/--zookeeper", value.to_owned())),
             group_id: args
                 .value_of("group-id")
                 .map(|x| x.to_owned())

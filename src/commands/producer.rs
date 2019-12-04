@@ -57,8 +57,8 @@ impl From<Config> for ProducerCommand {
     fn from(conf: Config) -> Self {
         let brokers = conf
             .brokers
-            .value
-            .expect("brokers is required for `producer`");
+            .expect("brokers is required for `producer`")
+            .value;
 
         Self {
             producer: new_producer(&brokers),

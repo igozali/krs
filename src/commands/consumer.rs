@@ -54,8 +54,9 @@ impl From<Config> for ConsumerCommand {
     fn from(conf: Config) -> Self {
         let brokers = conf
             .brokers
-            .value
-            .expect("brokers is required for `consumer`");
+            .expect("brokers is required for `consumer`")
+            .value;
+
         let group_id = conf.group_id;
 
         Self {
