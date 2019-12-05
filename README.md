@@ -10,8 +10,8 @@ Dual-licensed under MIT or the [UNLICENSE](https://unlicense.org/).
 ### Features
 
 *   Easy to type
-*   Fast startup (thanks Rust!)
-*   Hopefully intuitive to use.
+*   Fast startup
+*   Hopefully intuitive to use
 *   Diagnostic output to stderr, main output to stdout, which allows below feature
 *   JSON output for easy consumption with [jq](https://stedolan.github.io/jq/)
 *   Change some context variables (e.g. Kafka brokers or Zookeeper host) via environment variables, `.env` files, or pass it directly through the CLI.
@@ -81,14 +81,6 @@ with previous ones).
 
 Mostly tested with `Kafka 2.1.1-cp1 (Commit:9aa84c2aaa91e392)`.
 
-### Caveats
-
-At the moment, I'm depending on an unpublished version of
-[rust-rdkafka](https://github.com/fede1024/rust-rdkafka) to get access to the
-AdminClient. When [this
-issue](https://github.com/fede1024/rust-rdkafka/issues/179) is fixed, I'll fix
-this on my side.
-
 ### Upcoming Features
 
 _Note: There will be no guarantees as to when these features are going to be
@@ -111,4 +103,4 @@ implemented, but feel free to submit a PR._
 * [RIIR](https://github.com/ansuz/RIIR), but in good spirit! I think the [tool
   where the inspiration came from](https://github.com/fgeller/kt) was already a
   fantastic idea.
-* But most importantly, I just needed a Rust project to learn Rust! :)
+* But most importantly, I just needed a project to learn Rust! :)

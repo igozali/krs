@@ -1,10 +1,8 @@
 use chrono::{TimeZone, Utc};
 use clap::{App, SubCommand};
 use futures::future::Future;
-// TODO: Need this line after fixing AdminClient hack
-// use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
-// TODO: Remove this line after fixing AdminClient hack
-use crate::hack::{AdminClient, AdminOptions, NewTopic, TopicReplication};
+
+use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::client::DefaultClientContext;
 use rdkafka::consumer::{BaseConsumer, Consumer};
 use rdkafka::metadata::MetadataTopic;

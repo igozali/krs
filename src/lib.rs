@@ -6,10 +6,8 @@ use std::time::Duration;
 use chrono::offset::Utc;
 use clap::{App, ArgMatches, SubCommand};
 use dotenv;
-// TODO: Need this line after fixing AdminClient hack
-// use rdkafka::admin::AdminClient;
-// TODO: Remove this line after fixing AdminClient hack
-use crate::hack::AdminClient;
+
+use rdkafka::admin::AdminClient;
 use rdkafka::client::DefaultClientContext;
 use rdkafka::config::FromClientConfig;
 use rdkafka::consumer::Consumer;
@@ -18,7 +16,6 @@ use rdkafka::ClientConfig;
 
 mod args;
 pub mod commands;
-mod hack;
 
 // TODO: Move to global var as well.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -31,7 +28,6 @@ pub enum Error {
     InvalidUsage(String),
     Generic(String),
     Kafka(rdkafka::error::KafkaError),
-    RDKafka(rdkafka_sys::types::RDKafkaError),
     Clap(clap::Error),
     Io(std::io::Error),
     Other(Box<dyn std::error::Error>),
