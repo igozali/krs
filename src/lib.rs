@@ -4,7 +4,7 @@ use std::fmt::{Debug, Display};
 use std::time::Duration;
 
 use chrono::offset::Utc;
-use clap::{App, ArgMatches, SubCommand};
+use clap::{App, ArgMatches, SubCommand, crate_version, crate_authors};
 use dotenv;
 
 use rdkafka::admin::AdminClient;
@@ -19,6 +19,8 @@ pub mod commands;
 
 // TODO: Move to global var as well.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
+
+pub const VERSION: &str = env!("GIT_DESCRIPTION");
 
 pub const BROKERS_ENV_KEY: &str = "KRS_BROKERS";
 pub const ZOOKEEPER_ENV_KEY: &str = "KRS_ZOOKEEPER";
@@ -322,8 +324,8 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
 // TODO: Probably use lazy_static! for this.
 pub fn make_parser<'a, 'b>() -> App<'a, 'b> {
     App::new("krs")
-        .author("Ivan Gozali")
-        .version(env!("GIT_DESCRIPTION"))
+        .author(crate_authors!())
+        .version(crate_version!())
         .about("Simple Kafka CLI tool.")
         .arg(args::brokers())
         .arg(args::group_id())
