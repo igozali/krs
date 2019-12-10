@@ -51,11 +51,3 @@ pub fn num_replicas<'a, 'b>() -> Arg<'a, 'b> {
         .default_value("1")
         .takes_value(true)
 }
-
-pub fn output_type<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("output-type")
-        .short("o")
-        .help("Output type (can be table, csv, json)")
-        .default_value("json")
-        .takes_value(true)
-}

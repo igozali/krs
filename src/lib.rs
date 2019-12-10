@@ -63,31 +63,6 @@ impl std::error::Error for Error {}
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug)]
-pub enum OutputType {
-    Table,
-    Csv,
-    Json,
-}
-
-// Can't do <T: AsRef<str>>
-// https://github.com/rust-lang/rust/issues/50133
-impl TryFrom<&str> for OutputType {
-    type Error = Error;
-
-    fn try_from(s: &str) -> Result<Self> {
-        match s {
-            "table" => Ok(OutputType::Table),
-            "csv" => Ok(OutputType::Csv),
-            "json" => Ok(OutputType::Json),
-            other => Err(Error::InvalidUsage(format!(
-                "Invalid argument for output_type: {}",
-                other
-            ))),
-        }
-    }
-}
-
 // Indicates that a value may come from environment variables,
 // .env file, or CLI options.
 #[derive(Debug)]
@@ -123,8 +98,6 @@ impl<T: Display> Display for Sourced<T> {
 // places: env variables, .env file, CLI arguments from various levels
 #[derive(Debug, Default)]
 pub struct Config {
-    pub output_type: Option<OutputType>,
-
     pub brokers: Option<Sourced<String>>,
     pub group_id: Option<String>,
 
@@ -179,7 +152,6 @@ impl Config {
     // the fields in `rhs` are not None.
     fn merge(self, rhs: Self) -> Self {
         Self {
-            output_type: rhs.output_type.or(self.output_type),
             brokers: rhs.brokers.or(self.brokers),
             zookeeper: rhs.zookeeper.or(self.zookeeper),
             group_id: rhs.group_id.or(self.group_id),
@@ -191,9 +163,6 @@ impl From<&ArgMatches<'_>> for Config {
     fn from(args: &ArgMatches<'_>) -> Self {
         let default_group_id = format!("krs-{}", Utc::now().timestamp_millis());
         Self {
-            output_type: args.value_of("output-type").map(|x| {
-                OutputType::try_from(x).unwrap_or_else(|_| panic!("Invalid output type {}", x))
-            }),
             brokers: args
                 .value_of("brokers")
                 .map(|value| Sourced::new("-b/--brokers", value.to_owned())),
@@ -330,7 +299,6 @@ pub fn make_parser<'a, 'b>() -> App<'a, 'b> {
         .arg(args::brokers())
         .arg(args::group_id())
         .arg(args::zookeeper())
-        .arg(args::output_type())
         .subcommand(
             SubCommand::with_name("env")
                 .about("Environment commands (defaults to `env show`).")
