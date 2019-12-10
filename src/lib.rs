@@ -4,9 +4,8 @@ use std::fmt::{Debug, Display};
 use std::time::Duration;
 
 use chrono::offset::Utc;
-use clap::{App, ArgMatches, SubCommand, crate_version, crate_authors};
+use clap::{crate_authors, crate_version, App, ArgMatches, SubCommand};
 use dotenv;
-
 use rdkafka::admin::AdminClient;
 use rdkafka::client::DefaultClientContext;
 use rdkafka::config::FromClientConfig;
@@ -16,50 +15,17 @@ use rdkafka::ClientConfig;
 
 mod args;
 pub mod commands;
+pub mod errors;
 
-// TODO: Move to global var as well.
+pub use errors::Error;
+
+// TODO: Move to global CLI arg as well.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub const VERSION: &str = env!("GIT_DESCRIPTION");
 
 pub const BROKERS_ENV_KEY: &str = "KRS_BROKERS";
 pub const ZOOKEEPER_ENV_KEY: &str = "KRS_ZOOKEEPER";
-
-#[derive(Debug)]
-pub enum Error {
-    InvalidUsage(String),
-    Generic(String),
-    Kafka(rdkafka::error::KafkaError),
-    Clap(clap::Error),
-    Io(std::io::Error),
-    Other(Box<dyn std::error::Error>),
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        Debug::fmt(self, f)
-    }
-}
-
-impl From<rdkafka::error::KafkaError> for Error {
-    fn from(e: rdkafka::error::KafkaError) -> Self {
-        Error::Kafka(e)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        Error::Io(e)
-    }
-}
-
-impl From<clap::Error> for Error {
-    fn from(e: clap::Error) -> Self {
-        Error::Clap(e)
-    }
-}
-
-impl std::error::Error for Error {}
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -211,15 +177,16 @@ fn new_admin_client(brokers: &str) -> AdminClient<DefaultClientContext> {
         .unwrap()
 }
 
-// Just having fun with extension methods here. Not really necessary,
-// but looks cool.
-trait StringExt: ToString {
-    fn to_i32(&self) -> i32 {
-        self.to_string().parse().unwrap()
-    }
+fn required<'a>(m: &'a ArgMatches<'a>, x: &str) -> Result<&'a str> {
+    m.value_of(x)
+        .ok_or_else(|| Error::InvalidUsage(format!("Argument is required for {}", x)))
 }
 
-impl StringExt for &str {}
+fn required_i32(m: &ArgMatches<'_>, x: &str) -> Result<i32> {
+    required(m, x)?
+        .parse::<i32>()
+        .map_err(|e| Error::InvalidUsage(format!("Expected integer argument for {}, but {}", x, e)))
+}
 
 // TODO: This function still looks really ugly. I wonder if I could macro this.
 pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
@@ -234,6 +201,7 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
                 base, subcmd
             )
         };
+
         Err(Error::Generic(msg))
     }
 
@@ -241,57 +209,51 @@ pub fn dispatch(m: ArgMatches<'_>) -> Result<()> {
     // FIXME: Commands should implement TryFrom(config), not From.
     match m.subcommand() {
         ("topics", Some(s)) => match s.subcommand() {
-            ("list", _) => commands::topics::ListCommand::from(config).run(),
+            ("list", _) => commands::topics::ListCommand::try_from(config)?.run(),
             ("describe", Some(ss)) => {
-                let topic_name = ss.value_of("topic").unwrap();
-                commands::topics::DescribeCommand::from(config).run(topic_name)
+                let topic_name = required(ss, "topic")?;
+                commands::topics::DescribeCommand::try_from(config)?.run(topic_name)
             }
             ("create", Some(ss)) => {
-                let topic_name = ss
-                    .value_of("topic")
-                    .expect("topic name is required for `topics create`");
-                let num_partitions = ss.value_of("num_partitions").map(|x| x.to_i32()).unwrap();
-                let num_replicas = ss.value_of("num_replicas").map(|x| x.to_i32()).unwrap();
-                commands::topics::CreateCommand::from(config).run(
+                let topic_name = required(ss, "topic")?;
+                let num_partitions = required_i32(ss, "num_partitions")?;
+                let num_replicas = required_i32(ss, "num_replicas")?;
+                commands::topics::CreateCommand::try_from(config)?.run(
                     topic_name,
                     num_partitions,
                     num_replicas,
                 )
             }
             ("delete", Some(ss)) => {
-                let topic_name = ss
-                    .value_of("topic")
-                    .expect("topic name is required for `topics delete`");
-                commands::topics::DeleteCommand::from(config).run(topic_name)
+                let topic_name = required(ss, "topic")?;
+                commands::topics::DeleteCommand::try_from(config)?.run(topic_name)
             }
             // `krs topics` defaults to `krs topics show`
-            (_, _) => commands::topics::ListCommand::from(config).run(),
+            (_, _) => commands::topics::ListCommand::try_from(config)?.run(),
         },
         ("env", Some(s)) => match s.subcommand() {
-            ("show", _) => commands::env::ShowCommand::from(config).run(),
-            ("set", _) => commands::env::SetCommand::from(config).run(),
+            ("show", _) => commands::env::ShowCommand::try_from(config)?.run(),
+            ("set", _) => commands::env::SetCommand::try_from(config)?.run(),
             // If only `krs env` is specified, default to `krs env show`
-            (_, _) => commands::env::ShowCommand::from(config).run(),
+            (_, _) => commands::env::ShowCommand::try_from(config)?.run(),
         },
         ("consumer", Some(s)) => {
-            let topic_name = s
-                .value_of("topic")
-                .expect("topic name is required for `consumer`");
-            commands::consumer::ConsumerCommand::from(config).run(topic_name)
+            let topic_name = required(s, "topic")?;
+            commands::consumer::ConsumerCommand::try_from(config)?.run(topic_name)
         }
         ("producer", Some(s)) => {
-            let topic_name = s
-                .value_of("topic")
-                .expect("topic name is required for `consumer`");
-            commands::producer::ProducerCommand::from(config).run(topic_name)
+            let topic_name = required(s, "topic")?;
+            commands::producer::ProducerCommand::try_from(config)?.run(topic_name)
         }
-        ("wait", Some(_)) => commands::wait::WaitCommand::from(config).run(),
+        ("wait", Some(_)) => commands::wait::WaitCommand::try_from(config)?.run(),
         (unhandled, _) => fail("", unhandled),
     }
 }
 
 // TODO: Probably use lazy_static! for this.
 pub fn make_parser<'a, 'b>() -> App<'a, 'b> {
+    // TODO: Can't embed extended Git information in version since it's not
+    // available when running `cargo install` on some other machine.
     App::new("krs")
         .author(crate_authors!())
         .version(crate_version!())

@@ -1,14 +1,15 @@
 #[cfg(test)]
-// TODO: https://github.com/rust-lang/rust/issues/46379
-mod util;
-pub use util::*;
-
+use std::convert::TryFrom;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 
 use krs::{BROKERS_ENV_KEY, ZOOKEEPER_ENV_KEY};
+
+// TODO: https://github.com/rust-lang/rust/issues/46379
+mod util;
+pub use util::*;
 
 fn readlines(f: File) -> Vec<String> {
     BufReader::new(f).lines().map(|x| x.unwrap()).collect()
@@ -25,7 +26,9 @@ fn test_set_env_does_not_destroy_existing_dotenv_file() -> std::io::Result<()> {
         f.write_all(b"TEST_KEY=test_value")
     }?;
 
-    assert_ok!(SetCommand::from(test_config_brokers_only()).run());
+    assert_ok!(SetCommand::try_from(test_config_brokers_only())
+        .unwrap()
+        .run());
     let lines: Vec<String> = readlines(File::open(".env").unwrap());
 
     assert!(
@@ -34,7 +37,7 @@ fn test_set_env_does_not_destroy_existing_dotenv_file() -> std::io::Result<()> {
     );
     assert_some!(lines.iter().find(|x| x.starts_with(BROKERS_ENV_KEY)));
 
-    assert_ok!(SetCommand::from(test_config()).run());
+    assert_ok!(SetCommand::try_from(test_config()).unwrap().run());
     let lines: Vec<String> = readlines(File::open(".env").unwrap());
 
     assert!(

@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use clap::{App, SubCommand};
 use futures::stream::Stream;
 use rdkafka::consumer::{Consumer, StreamConsumer};
@@ -19,9 +21,7 @@ impl ConsumerCommand {
     }
 
     pub fn run(&self, topic_name: &str) -> crate::Result<()> {
-        self.consumer
-            .subscribe(&[topic_name])
-            .map_err(|_| crate::Error::Generic("Failed to subscribe to topic".to_owned()))?;
+        self.consumer.subscribe(&[topic_name])?;
 
         let pipeline = self
             .consumer
@@ -50,18 +50,19 @@ impl ConsumerCommand {
     }
 }
 
-impl From<Config> for ConsumerCommand {
-    fn from(conf: Config) -> Self {
-        let brokers = conf
-            .brokers
-            .expect("brokers is required for `consumer`")
-            .value;
+impl TryFrom<Config> for ConsumerCommand {
+    type Error = crate::Error;
+
+    fn try_from(conf: Config) -> crate::Result<Self> {
+        let brokers = conf.brokers.as_ref().ok_or_else(|| {
+            crate::Error::InvalidUsage("brokers is required for `consumer`".into())
+        })?;
 
         let group_id = conf.group_id;
 
-        Self {
+        Ok(Self {
             // TODO: Can do group_id.as_deref() in Rust 1.40
             consumer: new_consumer(&brokers, group_id.as_ref().map(String::as_str)),
-        }
+        })
     }
 }

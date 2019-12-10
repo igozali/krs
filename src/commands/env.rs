@@ -1,19 +1,13 @@
-use std::fs;
-use std::fs::File;
+use std::convert::TryFrom;
+use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};
 
 use clap::{App, SubCommand};
 
-use crate::{Config, Sourced, BROKERS_ENV_KEY, ZOOKEEPER_ENV_KEY};
+use crate::{Config, Error, Sourced, BROKERS_ENV_KEY, ZOOKEEPER_ENV_KEY};
 
 pub struct ShowCommand {
     config: Config,
-}
-
-impl From<Config> for ShowCommand {
-    fn from(args: Config) -> Self {
-        Self { config: args }
-    }
 }
 
 impl ShowCommand {
@@ -30,15 +24,17 @@ impl ShowCommand {
     }
 }
 
+impl TryFrom<Config> for ShowCommand {
+    type Error = Error;
+
+    fn try_from(args: Config) -> crate::Result<Self> {
+        Ok(Self { config: args })
+    }
+}
+
 // TODO: Not sure what this should contain.
 pub struct SetCommand {
     config: Config,
-}
-
-impl From<Config> for SetCommand {
-    fn from(args: Config) -> Self {
-        Self { config: args }
-    }
 }
 
 // If there's some value in the option, "consume" the option by replacing
@@ -77,8 +73,10 @@ impl SetCommand {
 
         // If lines for the args already exist in .env, replace them.
         if let Ok(orig) = File::open("./.env") {
-            // TODO: Why does `lines().map(|x| x?)` not work?
-            for line in BufReader::new(orig).lines().map(|x| x.unwrap()) {
+            for line in BufReader::new(orig)
+                .lines()
+                .map(|x| x.expect("FATAL: Failed to read line"))
+            {
                 if line.starts_with(BROKERS_ENV_KEY) {
                     // TODO: Should not write if self.config.brokers.source is already ".env file"
                     maybe_write(&mut f, &mut brokers, BROKERS_ENV_KEY)?;
@@ -97,5 +95,13 @@ impl SetCommand {
         fs::rename("./.env.new", "./.env")?;
 
         Ok(())
+    }
+}
+
+impl TryFrom<Config> for SetCommand {
+    type Error = Error;
+
+    fn try_from(args: Config) -> crate::Result<Self> {
+        Ok(Self { config: args })
     }
 }

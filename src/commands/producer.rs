@@ -1,10 +1,12 @@
+use std::convert::TryFrom;
+
 use clap::{App, SubCommand};
 use futures::future::Future;
 use futures::stream::Stream;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 
 use crate::args;
-use crate::{new_producer, Config};
+use crate::{new_producer, Config, Error};
 
 pub struct ProducerCommand {
     producer: FutureProducer,
@@ -53,15 +55,17 @@ impl ProducerCommand {
     }
 }
 
-impl From<Config> for ProducerCommand {
-    fn from(conf: Config) -> Self {
+impl TryFrom<Config> for ProducerCommand {
+    type Error = Error;
+
+    fn try_from(conf: Config) -> crate::Result<Self> {
         let brokers = conf
             .brokers
-            .expect("brokers is required for `producer`")
-            .value;
+            .as_ref()
+            .ok_or_else(|| Error::InvalidUsage("brokers is required for `producer`".into()))?;
 
-        Self {
+        Ok(Self {
             producer: new_producer(&brokers),
-        }
+        })
     }
 }

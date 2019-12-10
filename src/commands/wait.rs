@@ -1,7 +1,9 @@
+use std::convert::TryFrom;
+
 use clap::{App, SubCommand};
 use rdkafka::consumer::{BaseConsumer, Consumer};
 
-use crate::{new_consumer, Config, DEFAULT_TIMEOUT};
+use crate::{new_consumer, Config, Error, DEFAULT_TIMEOUT};
 
 pub struct WaitCommand {
     consumer: BaseConsumer,
@@ -38,12 +40,17 @@ impl WaitCommand {
     }
 }
 
-impl From<Config> for WaitCommand {
-    fn from(conf: Config) -> Self {
-        let brokers = conf.brokers.expect("brokers is required for `wait`").value;
+impl TryFrom<Config> for WaitCommand {
+    type Error = Error;
 
-        Self {
+    fn try_from(conf: Config) -> crate::Result<Self> {
+        let brokers = conf
+            .brokers
+            .as_ref()
+            .ok_or_else(|| Error::InvalidUsage("brokers is required for `wait`".into()))?;
+
+        Ok(Self {
             consumer: new_consumer(&brokers, None),
-        }
+        })
     }
 }

@@ -1,13 +1,13 @@
 #[cfg(test)]
-// TODO: https://github.com/rust-lang/rust/issues/46379
-mod util;
-pub use util::*;
-
 use std::env;
 use std::fs::File;
 use std::io::Write;
 
 use krs::{make_parser, Config};
+
+// TODO: https://github.com/rust-lang/rust/issues/46379
+mod util;
+pub use util::*;
 
 #[test]
 fn test_global_args() {

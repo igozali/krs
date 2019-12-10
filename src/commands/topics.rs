@@ -1,7 +1,8 @@
+use std::convert::TryFrom;
+
 use chrono::{TimeZone, Utc};
 use clap::{App, SubCommand};
 use futures::future::Future;
-
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::client::DefaultClientContext;
 use rdkafka::consumer::{BaseConsumer, Consumer};
@@ -90,15 +91,17 @@ impl ListCommand {
     }
 }
 
-impl From<Config> for ListCommand {
-    fn from(conf: Config) -> Self {
+impl TryFrom<Config> for ListCommand {
+    type Error = crate::Error;
+
+    fn try_from(conf: Config) -> crate::Result<Self> {
         let brokers = conf
             .brokers
             .as_ref()
-            .expect("brokers is required for `topics list`");
-        Self {
+            .ok_or_else(|| Error::Generic("brokers is required for `topics list`".into()))?;
+        Ok(Self {
             consumer: new_consumer(&brokers, None),
-        }
+        })
     }
 }
 
@@ -124,17 +127,15 @@ impl DescribeCommand {
     pub fn run(&self, topic_name: &str) -> crate::Result<()> {
         let md = self
             .consumer
-            .fetch_metadata(Some(&topic_name), Some(DEFAULT_TIMEOUT))
-            .unwrap();
+            .fetch_metadata(Some(&topic_name), Some(DEFAULT_TIMEOUT))?;
         let topics = md.topics();
         assert!(topics.len() == 1, "DescribeCommand takes only 1 topic");
 
         let mut info = TopicInfo::from(&topics[0]);
         for p in info.partitions.iter_mut() {
-            let watermarks = self
-                .consumer
-                .fetch_watermarks(&topic_name, p.id, Some(DEFAULT_TIMEOUT))
-                .unwrap();
+            let watermarks =
+                self.consumer
+                    .fetch_watermarks(&topic_name, p.id, Some(DEFAULT_TIMEOUT))?;
             p.watermarks = watermarks;
         }
 
@@ -150,21 +151,23 @@ impl DescribeCommand {
     }
 }
 
-impl From<Config> for DescribeCommand {
-    fn from(conf: Config) -> Self {
+impl TryFrom<Config> for DescribeCommand {
+    type Error = Error;
+
+    fn try_from(conf: Config) -> crate::Result<Self> {
         let brokers = conf
             .brokers
             .as_ref()
-            .expect("brokers is required for `topics describe`");
+            .ok_or_else(|| Error::Generic("brokers is required for `topics describe`".into()))?;
         let zookeeper = conf
             .zookeeper
             .as_ref()
-            .expect("zookeeper is required for `topics describe`");
+            .ok_or_else(|| Error::Generic("zookeeper is required for `topics describe`".into()))?;
 
-        Self {
+        Ok(Self {
             consumer: new_consumer(&brokers, None),
             zk: ZooKeeper::connect(&zookeeper, DEFAULT_TIMEOUT, DoNothingWatcher).unwrap(),
-        }
+        })
     }
 }
 
@@ -194,8 +197,6 @@ impl CreateCommand {
         )];
         let admin_options = &AdminOptions::new();
         let rx = self.admin.create_topics(new_topics, admin_options).wait()?;
-        // TODO: Need this line after fixing AdminClient hack
-        // .map_err(Error::Kafka)?;
 
         rx[0]
             .as_ref()
@@ -207,13 +208,18 @@ impl CreateCommand {
     }
 }
 
-impl From<Config> for CreateCommand {
-    fn from(conf: Config) -> Self {
-        let brokers = conf.brokers.as_ref().unwrap();
+impl TryFrom<Config> for CreateCommand {
+    type Error = Error;
 
-        Self {
+    fn try_from(conf: Config) -> crate::Result<Self> {
+        let brokers = conf
+            .brokers
+            .as_ref()
+            .ok_or_else(|| Error::InvalidUsage("brokers is required for `create`".into()))?;
+
+        Ok(Self {
             admin: new_admin_client(&brokers),
-        }
+        })
     }
 }
 
@@ -233,8 +239,6 @@ impl DeleteCommand {
             .admin
             .delete_topics(&[topic_name], &AdminOptions::new())
             .wait()?;
-        // TODO: Need this line after fixing AdminClient hack
-        // .map_err(Error::Kafka)?;
 
         rx[0]
             .as_ref()
@@ -246,12 +250,17 @@ impl DeleteCommand {
     }
 }
 
-impl From<Config> for DeleteCommand {
-    fn from(conf: Config) -> Self {
-        let brokers = conf.brokers.as_ref().unwrap();
+impl TryFrom<Config> for DeleteCommand {
+    type Error = Error;
 
-        Self {
+    fn try_from(conf: Config) -> crate::Result<Self> {
+        let brokers = conf
+            .brokers
+            .as_ref()
+            .ok_or_else(|| Error::InvalidUsage("brokers is required for `create`".into()))?;
+
+        Ok(Self {
             admin: new_admin_client(&brokers),
-        }
+        })
     }
 }
